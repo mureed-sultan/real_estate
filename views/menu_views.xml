@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Root Menu -->
+    <menuitem
+        id="menu_realestate_root"
+        name="Real Estate CRM"
+        sequence="10"
+        groups="real_estate.group_realestate_agent,real_estate.group_realestate_manager"
+        action="action_realestate_agent_dashboard"/>
+
+    <!-- Dashboard -->
+    <menuitem
+        id="menu_realestate_dashboard"
+        name="Dashboard"
+        parent="menu_realestate_root"
+        action="action_realestate_agent_dashboard"
+        sequence="1"
+        groups="real_estate.group_realestate_agent,real_estate.group_realestate_manager"/>
+
+    <!-- Leads -->
+    <menuitem
+        id="menu_realestate_leads_root"
+        name="Leads"
+        parent="menu_realestate_root"
+        sequence="10"/>
+
+    <menuitem
+        id="menu_realestate_my_leads"
+        name="My Leads"
+        parent="menu_realestate_leads_root"
+        action="action_realestate_agent_leads"
+        sequence="1"
+        groups="real_estate.group_realestate_agent"/>
+
+    <menuitem
+        id="menu_realestate_all_leads"
+        name="All Leads"
+        parent="menu_realestate_leads_root"
+        action="action_realestate_manager_leads"
+        sequence="2"
+        groups="real_estate.group_realestate_manager"/>
+
+    <!-- Calls -->
+    <menuitem
+        id="menu_realestate_calls_root"
+        name="Calls"
+        parent="menu_realestate_root"
+        sequence="20"/>
+
+    <menuitem
+        id="menu_realestate_my_calls"
+        name="My Call History"
+        parent="menu_realestate_calls_root"
+        action="action_realestate_calls_agent"
+        sequence="1"
+        groups="real_estate.group_realestate_agent"/>
+
+    <menuitem
+        id="menu_realestate_all_calls"
+        name="All Calls"
+        parent="menu_realestate_calls_root"
+        action="action_realestate_calls_all"
+        sequence="2"
+        groups="real_estate.group_realestate_manager"/>
+
+    <menuitem
+        id="menu_realestate_call_statistics"
+        name="Call Statistics"
+        parent="menu_realestate_calls_root"
+        action="action_realestate_admin_call_dashboard"
+        sequence="3"
+        groups="real_estate.group_realestate_manager"/>
+
+    <!-- Followups -->
+    <menuitem
+        id="menu_realestate_followups"
+        name="Follow-ups"
+        parent="menu_realestate_root"
+        action="action_realestate_agent_followups"
+        sequence="30"
+        groups="real_estate.group_realestate_agent,real_estate.group_realestate_manager"/>
+
+    <!-- Performance -->
+    <menuitem
+        id="menu_realestate_performance_root"
+        name="Performance"
+        parent="menu_realestate_root"
+        sequence="40"
+        groups="real_estate.group_realestate_manager"/>
+
+    <menuitem
+        id="menu_realestate_agent_performance"
+        name="Agent Performance"
+        parent="menu_realestate_performance_root"
+        action="action_realestate_performance_all"
+        sequence="1"
+        groups="real_estate.group_realestate_manager"/>
+
+    <!-- Commissions -->
+    <menuitem
+        id="menu_realestate_commission_root"
+        name="Commissions"
+        parent="menu_realestate_root"
+        sequence="50"/>
+
+    <menuitem
+        id="menu_realestate_my_commissions"
+        name="My Commissions"
+        parent="menu_realestate_commission_root"
+        action="action_agent_commissions_agent"
+        sequence="1"
+        groups="real_estate.group_realestate_agent"/>
+
+    <menuitem
+        id="menu_realestate_all_commissions"
+        name="All Commissions"
+        parent="menu_realestate_commission_root"
+        action="action_agent_commissions_all"
+        sequence="2"
+        groups="real_estate.group_realestate_manager"/>
+
+    <!-- Settings -->
+    <menuitem
+        id="menu_realestate_configuration"
+        name="Configuration"
+        parent="menu_realestate_root"
+        sequence="100"
+        groups="real_estate.group_realestate_manager"/>
+
+    <!-- <menuitem
+        id="res_config_settings_view_form_inherit_realestate_voip"
+        name="Settings"
+        parent="menu_realestate_configuration"
+        action="base.action_res_config_settings"
+        sequence="1"
+        groups="real_estate.group_realestate_manager"/> -->
+
+</odoo>

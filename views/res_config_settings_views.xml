@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_inherit_realestate_voip" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.realestate.voip</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="crm.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='crm']" position="inside">
+                <block title="Real Estate VOIP" name="realestate_voip_settings" groups="real_estate.group_realestate_manager">
+                    <setting string="Asterisk AMI" help="Configure Asterisk Manager Interface click-to-call.">
+                        <div class="content-group">
+                            <div class="row mt16">
+                                <label for="realestate_ami_host" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_ami_host"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_ami_port" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_ami_port"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_ami_username" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_ami_username"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_ami_secret" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_ami_secret" password="True"/>
+                            </div>
+                        </div>
+                    </setting>
+                    <setting string="Outbound Dialing" help="Asterisk context and endpoint template used by AMI Originate.">
+                        <div class="content-group">
+                            <div class="row mt16">
+                                <label for="realestate_endpoint_template" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_endpoint_template"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_outbound_context" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_outbound_context"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_originate_timeout" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_originate_timeout"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_default_caller_id" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_default_caller_id"/>
+                            </div>
+                        </div>
+                    </setting>
+                    <setting string="Recordings" help="Recordings are stored on the server filesystem. PostgreSQL stores only the path.">
+                        <div class="content-group">
+                            <div class="row mt16">
+                                <label for="realestate_recording_dir" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_recording_dir"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_recording_format" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_recording_format"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_webhook_token" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_webhook_token" password="True"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_stale_call_minutes" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_stale_call_minutes"/>
+                            </div>
+                        </div>
+                    </setting>
+                    <setting string="Commission" help="Default percentage used when an agent does not have a custom value.">
+                        <field name="realestate_default_commission_percent"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

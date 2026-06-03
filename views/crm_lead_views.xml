@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_crm_lead_form_inherit_realestate" model="ir.ui.view">
+        <field name="name">crm.lead.form.inherit.realestate.voip</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_realestate_call_customer" type="object" string="Call" class="oe_highlight" icon="fa-phone" invisible="not active"/>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_realestate_calls" type="object" class="oe_stat_button" icon="fa-phone">
+                    <field name="realestate_call_count" widget="statinfo" string="Calls"/>
+                </button>
+                <button name="action_view_realestate_followups" type="object" class="oe_stat_button" icon="fa-tasks">
+                    <field name="realestate_followup_count" widget="statinfo" string="Follow-ups"/>
+                </button>
+                <button name="action_view_realestate_commissions" type="object" class="oe_stat_button" icon="fa-money" groups="real_estate.group_realestate_manager">
+                    <field name="realestate_commission_count" widget="statinfo" string="Commissions"/>
+                </button>
+            </xpath>
+            <xpath expr="//field[@name='type'][1]" position="before">
+                <group name="realestate_information" string="Real Estate Lead">
+                    <field name="realestate_customer_name"/>
+                    <field name="mobile_number" widget="phone"/>
+                    <field name="whatsapp_number" widget="phone"/>
+                    <field name="property_type"/>
+                    <field name="property_location"/>
+                    <field name="budget"/>
+                    <field name="assigned_agent_id" widget="many2one_avatar_user"/>
+                    <field name="realestate_total_call_duration_display" readonly="1"/>
+                </group>
+            </xpath>
+            <xpath expr="//notebook/page[@name='internal_notes']" position="after">
+                <page string="Real Estate Notes" name="realestate_notes">
+                    <field name="realestate_notes" placeholder="Add real estate notes..."/>
+                </page>
+                <page string="Call History" name="realestate_call_history">
+                    <field name="realestate_call_ids" readonly="1">
+                        <list string="Calls" create="0" edit="0" delete="0">
+                            <field name="recording_exists" column_invisible="True"/>
+                            <field name="start_time"/>
+                            <field name="agent_id" widget="many2one_avatar_user"/>
+                            <field name="customer_number"/>
+                            <field name="duration"/>
+                            <field name="duration_display" optional="hide"/>
+                            <field name="status" widget="badge"/>
+                            <button name="action_play_recording" type="object" icon="fa-play" string="Play" invisible="not recording_exists"/>
+                            <button name="action_download_recording" type="object" icon="fa-download" string="Download" invisible="not recording_exists"/>
+                        </list>
+                    </field>
+                </page>
+                <page string="Commissions" name="realestate_commissions" groups="real_estate.group_realestate_manager">
+                    <field name="realestate_commission_ids">
+                        <list editable="bottom">
+                            <field name="agent_id" widget="many2one_avatar_user"/>
+                            <field name="property_sale_amount"/>
+                            <field name="commission_percent"/>
+                            <field name="commission_amount" readonly="1"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_realestate_lead_list" model="ir.ui.view">
+        <field name="name">crm.lead.realestate.list</field>
+        <field name="model">crm.lead</field>
+        <field name="priority" eval="5"/>
+        <field name="arch" type="xml">
+            <list string="Real Estate Leads" multi_edit="1" decoration-success="won_status == 'won'" decoration-muted="not active">
+                <field name="active" column_invisible="True"/>
+                <field name="won_status" column_invisible="True"/>
+                <field name="name"/>
+                <field name="realestate_customer_name"/>
+                <field name="mobile_number" widget="phone"/>
+                <field name="whatsapp_number" widget="phone" optional="hide"/>
+                <field name="property_type"/>
+                <field name="property_location"/>
+                <field name="budget"/>
+                <field name="assigned_agent_id" widget="many2one_avatar_user"/>
+                <field name="stage_id" optional="show"/>
+                <field name="activity_ids" optional="show" widget="list_activity"/>
+                <field name="realestate_call_count"/>
+                <button name="action_realestate_call_customer" type="object" icon="fa-phone" string="Call"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_realestate_lead_kanban" model="ir.ui.view">
+        <field name="name">crm.lead.realestate.kanban</field>
+        <field name="model">crm.lead</field>
+        <field name="priority" eval="5"/>
+        <field name="arch" type="xml">
+            <kanban string="Real Estate Leads" default_group_by="stage_id" class="o_kanban_small_column">
+                <field name="stage_id"/>
+                <field name="active"/>
+                <field name="won_status"/>
+                <templates>
+                    <t t-name="card">
+                        <field name="name" class="fw-bold"/>
+                        <div><field name="realestate_customer_name"/></div>
+                        <div><field name="mobile_number" widget="phone"/></div>
+                        <div class="text-muted"><field name="property_type"/> <field name="property_location"/></div>
+                        <div><field name="budget" widget="monetary" options="{'currency_field': 'company_currency'}"/></div>
+                        <footer class="pt-2">
+                            <field name="activity_ids" widget="kanban_activity"/>
+                            <field name="assigned_agent_id" widget="many2one_avatar_user" class="ms-auto"/>
+                        </footer>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_realestate_lead_search" model="ir.ui.view">
+        <field name="name">crm.lead.realestate.search</field>
+        <field name="model">crm.lead</field>
+        <field name="arch" type="xml">
+            <search string="Search Real Estate Leads">
+                <field name="name"/>
+                <field name="realestate_customer_name"/>
+                <field name="mobile_number"/>
+                <field name="whatsapp_number"/>
+                <field name="property_type"/>
+                <field name="property_location"/>
+                <field name="assigned_agent_id"/>
+                <field name="stage_id"/>
+                <field name="activity_state"/>
+                <filter string="My Leads" name="my_leads" domain="[('user_id', '=', uid)]"/>
+                <filter string="Won" name="won" domain="[('won_status', '=', 'won')]"/>
+                <filter string="Lost" name="lost" domain="[('won_status', '=', 'lost')]"/>
+                <filter string="Archived" name="archived" domain="[('active', '=', False)]"/>
+                <separator/>
+                <filter string="Late Activities" name="activities_overdue" domain="[('my_activity_date_deadline', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter string="Today Activities" name="activities_today" domain="[('my_activity_date_deadline', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <group>
+                    <filter string="Agent" name="group_agent" context="{'group_by': 'assigned_agent_id'}"/>
+                    <filter string="Property Type" name="group_property_type" context="{'group_by': 'property_type'}"/>
+                    <filter string="Location" name="group_location" context="{'group_by': 'property_location'}"/>
+                    <filter string="Stage" name="group_stage" context="{'group_by': 'stage_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_realestate_agent_leads" model="ir.actions.act_window">
+        <field name="name">Assigned Leads</field>
+        <field name="res_model">crm.lead</field>
+        <field name="view_mode">list,kanban,form,activity</field>
+        <field name="view_id" ref="view_realestate_lead_list"/>
+        <field name="search_view_id" ref="view_realestate_lead_search"/>
+        <field name="domain">[('user_id', '=', uid)]</field>
+        <field name="context">{'default_user_id': uid, 'default_assigned_agent_id': uid, 'search_default_my_leads': 1}</field>
+    </record>
+
+    <record id="action_realestate_manager_leads" model="ir.actions.act_window">
+        <field name="name">All Real Estate Leads</field>
+        <field name="res_model">crm.lead</field>
+        <field name="view_mode">list,kanban,form,activity</field>
+        <field name="view_id" ref="view_realestate_lead_list"/>
+        <field name="search_view_id" ref="view_realestate_lead_search"/>
+    </record>
+
+    <record id="action_realestate_agent_followups" model="ir.actions.act_window">
+        <field name="name">Follow-up Tasks</field>
+        <field name="res_model">mail.activity</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('res_model', '=', 'crm.lead'), ('user_id', '=', uid)]</field>
+        <field name="context">{'default_res_model': 'crm.lead', 'default_user_id': uid}</field>
+    </record>
+</odoo>

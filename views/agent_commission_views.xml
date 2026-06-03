@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_agent_commission_list" model="ir.ui.view">
+        <field name="name">agent.commission.list</field>
+        <field name="model">agent.commission</field>
+        <field name="arch" type="xml">
+            <list string="Commissions">
+                <field name="agent_id" widget="many2one_avatar_user"/>
+                <field name="lead_id"/>
+                <field name="property_sale_amount" sum="Total Sale Amount"/>
+                <field name="commission_percent"/>
+                <field name="commission_amount" sum="Total Commission"/>
+                <field name="currency_id" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_agent_commission_form" model="ir.ui.view">
+        <field name="name">agent.commission.form</field>
+        <field name="model">agent.commission</field>
+        <field name="arch" type="xml">
+            <form string="Commission">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="agent_id" widget="many2one_avatar_user"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="lead_id"/>
+                            <field name="agent_id" widget="many2one_avatar_user"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="property_sale_amount"/>
+                            <field name="commission_percent"/>
+                            <field name="commission_amount" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_agent_commission_search" model="ir.ui.view">
+        <field name="name">agent.commission.search</field>
+        <field name="model">agent.commission</field>
+        <field name="arch" type="xml">
+            <search string="Search Commissions">
+                <field name="agent_id"/>
+                <field name="lead_id"/>
+                <filter string="My Commissions" name="my_commissions" domain="[('agent_id', '=', uid)]"/>
+                <group>
+                    <filter string="Agent" name="group_agent" context="{'group_by': 'agent_id'}"/>
+                    <filter string="Lead" name="group_lead" context="{'group_by': 'lead_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_agent_commissions_agent" model="ir.actions.act_window">
+        <field name="name">My Commissions</field>
+        <field name="res_model">agent.commission</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_agent_commission_search"/>
+        <field name="domain">[('agent_id', '=', uid)]</field>
+    </record>
+
+    <record id="action_agent_commissions_all" model="ir.actions.act_window">
+        <field name="name">Commissions</field>
+        <field name="res_model">agent.commission</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_agent_commission_search"/>
+    </record>
+</odoo>

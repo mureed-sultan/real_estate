@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_agent_performance_kanban" model="ir.ui.view">
+        <field name="name">realestate.agent.performance.kanban</field>
+        <field name="model">realestate.agent.performance</field>
+        <field name="arch" type="xml">
+            <kanban string="Agent Performance" create="false" edit="false" delete="false" class="o_kanban_dashboard">
+                <templates>
+                    <t t-name="card">
+                        <div class="oe_kanban_global_click p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong><field name="agent_id"/></strong>
+                                <field name="commission_earned" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <span class="text-muted">Total Leads</span>
+                                    <div class="fs-4"><field name="total_leads"/></div>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Total Calls</span>
+                                    <div class="fs-4"><field name="total_calls"/></div>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Answered</span>
+                                    <div class="fs-4"><field name="answered_calls"/></div>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Missed</span>
+                                    <div class="fs-4"><field name="missed_calls"/></div>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Talk Time</span>
+                                    <div class="fs-5"><field name="total_talk_time_display"/></div>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">Converted</span>
+                                    <div class="fs-4"><field name="converted_leads"/></div>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 mt-3">
+                                <button name="action_open_assigned_leads" type="object" class="btn btn-primary btn-sm">Leads</button>
+                                <button name="action_open_calls" type="object" class="btn btn-secondary btn-sm">Calls</button>
+                                <button name="action_open_followups" type="object" class="btn btn-secondary btn-sm">Follow-ups</button>
+                                <button name="action_open_commissions" type="object" class="btn btn-secondary btn-sm">Commission</button>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_agent_performance_list" model="ir.ui.view">
+        <field name="name">realestate.agent.performance.list</field>
+        <field name="model">realestate.agent.performance</field>
+        <field name="arch" type="xml">
+            <list string="Agent Performance" create="false" edit="false" delete="false">
+                <field name="agent_id" widget="many2one_avatar_user"/>
+                <field name="total_leads" sum="Total Leads"/>
+                <field name="total_calls" sum="Total Calls"/>
+                <field name="answered_calls" sum="Answered Calls"/>
+                <field name="missed_calls" sum="Missed Calls"/>
+                <field name="total_talk_time" sum="Total Talk Time"/>
+                <field name="total_talk_time_display" optional="hide"/>
+                <field name="converted_leads" sum="Converted Leads"/>
+                <field name="commission_earned" sum="Commission Earned"/>
+                <field name="currency_id" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_agent_performance_form" model="ir.ui.view">
+        <field name="name">realestate.agent.performance.form</field>
+        <field name="model">realestate.agent.performance</field>
+        <field name="arch" type="xml">
+            <form string="Agent Performance" create="false" edit="false" delete="false">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_assigned_leads" type="object" class="oe_stat_button" icon="fa-list">
+                            <field name="total_leads" widget="statinfo" string="Leads"/>
+                        </button>
+                        <button name="action_open_calls" type="object" class="oe_stat_button" icon="fa-phone">
+                            <field name="total_calls" widget="statinfo" string="Calls"/>
+                        </button>
+                        <button name="action_open_followups" type="object" class="oe_stat_button" icon="fa-tasks">
+                            <span class="o_stat_text">Follow-ups</span>
+                        </button>
+                        <button name="action_open_commissions" type="object" class="oe_stat_button" icon="fa-money">
+                            <field name="commission_earned" widget="statinfo" string="Commission"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="agent_id"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="total_leads"/>
+                            <field name="converted_leads"/>
+                            <field name="total_calls"/>
+                            <field name="answered_calls"/>
+                            <field name="missed_calls"/>
+                        </group>
+                        <group>
+                            <field name="total_talk_time"/>
+                            <field name="total_talk_time_display"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="commission_earned"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_agent_performance_search" model="ir.ui.view">
+        <field name="name">realestate.agent.performance.search</field>
+        <field name="model">realestate.agent.performance</field>
+        <field name="arch" type="xml">
+            <search string="Search Agent Performance">
+                <field name="agent_id"/>
+                <filter string="Me" name="me" domain="[('agent_id', '=', uid)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_realestate_agent_dashboard" model="ir.actions.act_window">
+        <field name="name">Agent Dashboard</field>
+        <field name="res_model">realestate.agent.performance</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="view_agent_performance_search"/>
+        <field name="domain">[('agent_id', '=', uid)]</field>
+    </record>
+
+    <record id="action_realestate_performance_all" model="ir.actions.act_window">
+        <field name="name">Agent Performance</field>
+        <field name="res_model">realestate.agent.performance</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="view_agent_performance_search"/>
+    </record>
+</odoo>

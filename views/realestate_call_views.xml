@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_realestate_call_list" model="ir.ui.view">
+        <field name="name">realestate.call.list</field>
+        <field name="model">realestate.call</field>
+        <field name="arch" type="xml">
+            <list string="Call History" decoration-danger="status in ('missed', 'failed')" decoration-success="status in ('answered', 'completed')">
+                <field name="recording_exists" column_invisible="True"/>
+                <field name="start_time"/>
+                <field name="lead_id"/>
+                <field name="customer_name"/>
+                <field name="customer_number"/>
+                <field name="agent_id" widget="many2one_avatar_user"/>
+                <field name="duration" sum="Total Duration"/>
+                <field name="duration_display" optional="hide"/>
+                <field name="status" widget="badge"/>
+                <field name="recording_format" optional="hide"/>
+                <button name="action_play_recording" type="object" icon="fa-play" string="Play" invisible="not recording_exists"/>
+                <button name="action_download_recording" type="object" icon="fa-download" string="Download" invisible="not recording_exists"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_realestate_call_form" model="ir.ui.view">
+        <field name="name">realestate.call.form</field>
+        <field name="model">realestate.call</field>
+        <field name="arch" type="xml">
+            <form string="Call">
+                <header>
+                    <button name="action_play_recording" type="object" string="Play Recording" class="oe_highlight" icon="fa-play" invisible="not recording_exists"/>
+                    <button name="action_download_recording" type="object" string="Download Recording" icon="fa-download" invisible="not recording_exists"/>
+                    <field name="status" widget="statusbar" statusbar_visible="queued,ringing,answered,completed,missed,failed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="customer_name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="lead_id"/>
+                            <field name="customer_number"/>
+                            <field name="agent_id" widget="many2one_avatar_user"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group>
+                            <field name="start_time"/>
+                            <field name="end_time"/>
+                            <field name="duration"/>
+                            <field name="duration_display" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Asterisk">
+                        <field name="recording_exists" readonly="1"/>
+                        <field name="recording_format"/>
+                        <field name="recording_path"/>
+                        <field name="ami_action_id" readonly="1"/>
+                        <field name="asterisk_unique_id"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_realestate_call_search" model="ir.ui.view">
+        <field name="name">realestate.call.search</field>
+        <field name="model">realestate.call</field>
+        <field name="arch" type="xml">
+            <search string="Search Calls">
+                <field name="customer_name"/>
+                <field name="customer_number"/>
+                <field name="lead_id"/>
+                <field name="agent_id"/>
+                <field name="status"/>
+                <filter string="Answered" name="answered" domain="[('status', 'in', ('answered', 'completed'))]"/>
+                <filter string="Missed" name="missed" domain="[('status', '=', 'missed')]"/>
+                <filter string="Failed" name="failed" domain="[('status', '=', 'failed')]"/>
+                <filter string="With Recording" name="with_recording" domain="[('recording_path', '!=', False)]"/>
+                <filter string="Today" name="today" domain="[('start_time', '&gt;=', context_today().strftime('%Y-%m-%d 00:00:00'))]"/>
+                <group>
+                    <filter string="Agent" name="group_agent" context="{'group_by': 'agent_id'}"/>
+                    <filter string="Customer" name="group_customer" context="{'group_by': 'customer_name'}"/>
+                    <filter string="Status" name="group_status" context="{'group_by': 'status'}"/>
+                    <filter string="Date" name="group_date" context="{'group_by': 'start_time:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_realestate_call_graph" model="ir.ui.view">
+        <field name="name">realestate.call.graph</field>
+        <field name="model">realestate.call</field>
+        <field name="arch" type="xml">
+            <graph string="Call Statistics" type="bar">
+                <field name="agent_id"/>
+                <field name="status"/>
+                <field name="duration" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="view_realestate_call_pivot" model="ir.ui.view">
+        <field name="name">realestate.call.pivot</field>
+        <field name="model">realestate.call</field>
+        <field name="arch" type="xml">
+            <pivot string="Call Analysis">
+                <field name="agent_id" type="row"/>
+                <field name="status" type="col"/>
+                <field name="duration" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="action_realestate_calls_agent" model="ir.actions.act_window">
+        <field name="name">My Call History</field>
+        <field name="res_model">realestate.call</field>
+        <field name="view_mode">list,form,graph,pivot</field>
+        <field name="search_view_id" ref="view_realestate_call_search"/>
+        <field name="domain">[('agent_id', '=', uid)]</field>
+        <field name="context">{'default_agent_id': uid}</field>
+    </record>
+
+    <record id="action_realestate_calls_all" model="ir.actions.act_window">
+        <field name="name">All Calls</field>
+        <field name="res_model">realestate.call</field>
+        <field name="view_mode">list,form,graph,pivot</field>
+        <field name="search_view_id" ref="view_realestate_call_search"/>
+    </record>
+
+    <record id="action_realestate_admin_call_dashboard" model="ir.actions.act_window">
+        <field name="name">Call Statistics</field>
+        <field name="res_model">realestate.call</field>
+        <field name="view_mode">graph,pivot,list,form</field>
+        <field name="search_view_id" ref="view_realestate_call_search"/>
+        <field name="context">{'search_default_group_agent': 1}</field>
+    </record>
+</odoo>

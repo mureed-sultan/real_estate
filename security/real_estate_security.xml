@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_real_estate_crm_voip" model="ir.module.category">
+
+
+        <field name="name">Real Estate CRM VOIP</field>
+        <field name="sequence">25</field>
+    </record>
+
+<record id="group_realestate_agent" model="res.groups">
+    <field name="name">Agent</field>
+</record>
+
+<record id="group_realestate_manager" model="res.groups">
+    <field name="name">Manager</field>
+    <field name="implied_ids"
+           eval="[(4, ref('group_realestate_agent'))]"/>
+</record>
+
+    <data noupdate="1">
+        <record id="rule_realestate_lead_agent_own" model="ir.rule">
+            <field name="name">Real Estate Agents: assigned leads only</field>
+            <field name="model_id" ref="crm.model_crm_lead" />
+            <field name="domain_force">[('user_id', '=', user.id)]</field>
+            <field name="groups" eval="[(4, ref('group_realestate_agent'))]" />
+        </record>
+
+        <record id="rule_realestate_lead_manager_all" model="ir.rule">
+            <field name="name">Real Estate Managers: all leads</field>
+            <field name="model_id" ref="crm.model_crm_lead" />
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_realestate_manager'))]" />
+        </record>
+
+        <record id="rule_realestate_call_agent_own" model="ir.rule">
+            <field name="name">Real Estate Agents: own calls only</field>
+            <field name="model_id" ref="model_realestate_call" />
+            <field name="domain_force">[('agent_id', '=', user.id)]</field>
+            <field name="groups" eval="[(4, ref('group_realestate_agent'))]" />
+        </record>
+
+        <record id="rule_realestate_call_manager_all" model="ir.rule">
+            <field name="name">Real Estate Managers: all calls</field>
+            <field name="model_id" ref="model_realestate_call" />
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_realestate_manager'))]" />
+        </record>
+
+        <record id="rule_agent_commission_agent_own" model="ir.rule">
+            <field name="name">Real Estate Agents: own commissions only</field>
+            <field name="model_id" ref="model_agent_commission" />
+            <field name="domain_force">[('agent_id', '=', user.id)]</field>
+            <field name="groups" eval="[(4, ref('group_realestate_agent'))]" />
+        </record>
+
+        <record id="rule_agent_commission_manager_all" model="ir.rule">
+            <field name="name">Real Estate Managers: all commissions</field>
+            <field name="model_id" ref="model_agent_commission" />
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_realestate_manager'))]" />
+        </record>
+
+        <record id="rule_agent_performance_agent_own" model="ir.rule">
+            <field name="name">Real Estate Agents: own performance only</field>
+            <field name="model_id" ref="model_realestate_agent_performance" />
+            <field name="domain_force">[('agent_id', '=', user.id)]</field>
+            <field name="groups" eval="[(4, ref('group_realestate_agent'))]" />
+        </record>
+
+        <record id="rule_agent_performance_manager_all" model="ir.rule">
+            <field name="name">Real Estate Managers: all performance</field>
+            <field name="model_id" ref="model_realestate_agent_performance" />
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_realestate_manager'))]" />
+        </record>
+    </data>
+</odoo>
