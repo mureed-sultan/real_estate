@@ -46,6 +46,14 @@ class CrmLead(models.Model):
     ai_transcript = fields.Text(string="AI Transcript", tracking=True)
     ai_last_call_id = fields.Many2one("realestate.call", string="Last AI Call", readonly=True)
 
+    # ========== NEW: Manual MP3 upload field ==========
+    manual_audio_attachment_id = fields.Many2one(
+        "ir.attachment",
+        string="Manual Audio File (MP3/WAV)",
+        help="Upload an MP3 or WAV file. Click 'Process Audio' to transcribe and analyze.",
+        domain="[('mimetype', 'in', ['audio/mpeg', 'audio/wav', 'audio/mp3'])]",
+    )
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -198,4 +206,57 @@ class CrmLead(models.Model):
             "view_mode": "list,form",
             "domain": [("lead_id", "=", self.id)],
             "context": {"default_lead_id": self.id, "default_agent_id": self.user_id.id},
+        }
+
+    # ========== NEW: Process manually uploaded audio ==========
+    def action_process_manual_audio(self):
+        """Transcribe the manually uploaded MP3/WAV file and run AI analysis."""
+        self.ensure_one()
+        if not self.manual_audio_attachment_id:
+            raise UserError(_("Please upload an MP3 or WAV file first."))
+
+        # Create a temporary RealEstateCall object to reuse its transcription/analysis methods
+        temp_call = self.env["realestate.call"].create({
+            "lead_id": self.id,
+            "customer_name": self.realestate_customer_name or self.contact_name or self.name,
+            "customer_number": self.mobile_number or self.phone or "0000000000",
+            "agent_id": self.user_id.id or self.env.uid,
+            "status": "completed",  # Mark as completed so processing runs
+        })
+        # Attach the uploaded file as the call's recording attachment
+        temp_call.write({
+            "recording_attachment_id": self.manual_audio_attachment_id.id,
+            "voip_provider": "manual",
+        })
+
+        try:
+            # Run the same automated pipeline: transcribe + analyze
+            temp_call._run_automated_transcription_and_analysis()
+            # Copy results back to the lead
+            self.write({
+                "ai_transcript": temp_call.transcript_text,
+                "ai_lead_status": temp_call.ai_lead_status,
+                "ai_reason": temp_call.ai_reason,
+                "ai_last_call_id": temp_call.id,
+            })
+            self.message_post(
+                body=_("Manual audio file processed. Transcript and AI analysis completed."),
+                attachment_ids=[self.manual_audio_attachment_id.id],
+            )
+        except Exception as e:
+            raise UserError(_("Processing failed: %s") % str(e)) from e
+        finally:
+            # Optionally delete the temporary call (or keep it for audit)
+            # temp_call.unlink()  # uncomment if you don't want to keep it
+            pass
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Processing Complete"),
+                "message": _("Audio transcribed and analyzed. Check AI fields below."),
+                "sticky": False,
+                "type": "success",
+            },
         }

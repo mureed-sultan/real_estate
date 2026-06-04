@@ -3,6 +3,8 @@ access_crm_lead_realestate_agent,crm.lead.realestate.agent,crm.model_crm_lead,re
 access_crm_lead_realestate_manager,crm.lead.realestate.manager,crm.model_crm_lead,real_estate.group_realestate_manager,1,1,1,1
 access_realestate_call_agent,realestate.call.agent,model_realestate_call,real_estate.group_realestate_agent,1,1,1,0
 access_realestate_call_manager,realestate.call.manager,model_realestate_call,real_estate.group_realestate_manager,1,1,1,1
+access_twilio_call_handler_agent,twilio.call.handler.agent,model_twilio_call_handler,real_estate.group_realestate_agent,1,1,1,0
+access_twilio_call_handler_manager,twilio.call.handler.manager,model_twilio_call_handler,real_estate.group_realestate_manager,1,1,1,1
 access_agent_commission_agent,agent.commission.agent,model_agent_commission,real_estate.group_realestate_agent,1,0,0,0
 access_agent_commission_manager,agent.commission.manager,model_agent_commission,real_estate.group_realestate_manager,1,1,1,1
 access_agent_performance_agent,realestate.agent.performance.agent,model_realestate_agent_performance,real_estate.group_realestate_agent,1,0,0,0

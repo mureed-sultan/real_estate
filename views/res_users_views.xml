@@ -6,10 +6,10 @@
         <field name="inherit_id" ref="base.view_users_form"/>
         <field name="arch" type="xml">
             <xpath expr="//page[@name='preferences']//group[@name='other_preferences']" position="inside">
-                <separator string="Real Estate VOIP" groups="real_estate.group_realestate_manager"/>
+                <separator string="Real Estate VOIP"/>
                 <field name="asterisk_extension" groups="real_estate.group_realestate_manager"/>
                 <field name="asterisk_caller_id" groups="real_estate.group_realestate_manager"/>
-                <field name="twilio_phone_number" groups="real_estate.group_realestate_manager"/>
+                <field name="twilio_phone_number"/>
                 <field name="realestate_commission_percent" groups="real_estate.group_realestate_manager"/>
             </xpath>
         </field>

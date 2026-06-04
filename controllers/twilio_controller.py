@@ -1,197 +1,194 @@
 import json
 import logging
-from werkzeug.exceptions import BadRequest
 
-from odoo import http, _
+from odoo import http
+from odoo.http import request
 from odoo.exceptions import ValidationError
 
 try:
     from twilio.request_validator import RequestValidator
-except ImportError:
+except Exception:
     RequestValidator = None
 
 _logger = logging.getLogger(__name__)
 
 
 class TwilioController(http.Controller):
-    """Handle Twilio webhooks and call management"""
 
-    def _validate_twilio_request(self, **kwargs):
-        """Validate Twilio request signature"""
-        if not RequestValidator:
-            _logger.warning("Twilio SDK not installed, skipping signature validation")
-            return True
+    # -------------------------------------------------
+    # SAFE VALIDATION (NO CRASH)
+    # -------------------------------------------------
+    def _validate_twilio_request(self):
+        try:
+            if not RequestValidator:
+                _logger.warning("Twilio SDK not installed")
+                return True
 
-        auth_token = http.request.env["ir.config_parameter"].sudo().get_param(
-            "real_estate_twilio.auth_token"
-        )
-        
-        if not auth_token:
-            _logger.warning("Twilio Auth Token not configured")
+            auth_token = request.env["ir.config_parameter"].sudo().get_param(
+                "real_estate_twilio.auth_token"
+            )
+
+            if not auth_token:
+                _logger.warning("Missing Twilio auth token")
+                return False
+
+            validator = RequestValidator(auth_token)
+
+            url = request.httprequest.url
+
+            # SAFE: always use form dict
+            data = dict(request.httprequest.form)
+
+            signature = request.httprequest.headers.get("X-Twilio-Signature", "")
+
+            return validator.validate(url, data, signature)
+
+        except Exception as e:
+            _logger.exception("Twilio validation crash prevented")
             return False
 
-        validator = RequestValidator(auth_token)
-        
-        # Get request URL
-        url = http.request.url
-        
-        # Get POST/GET data
-        data = http.request.params.to_dict() if http.request.method == "POST" else {}
-        
-        # Get signature from request headers
-        signature = http.request.headers.get("X-Twilio-Signature", "")
-        
-        # Validate
-        return validator.validate(url, data, signature)
-
+    # -------------------------------------------------
+    # CALL STATUS WEBHOOK
+    # -------------------------------------------------
     @http.route("/twilio/call-status/<int:call_id>", type="http", auth="public", csrf=False, methods=["POST"])
     def handle_call_status(self, call_id, **kwargs):
-        """Handle call status updates from Twilio webhook"""
+
         try:
-            # Validate request
-            if not self._validate_twilio_request(**kwargs):
-                _logger.warning(f"Invalid Twilio signature for call {call_id}")
+            if not self._validate_twilio_request():
                 return http.Response("Invalid signature", status=403)
 
-            call = http.request.env["realestate.call"].browse(call_id)
+            call = request.env["realestate.call"].sudo().browse(call_id)
             if not call.exists():
-                return http.Response("Call not found", status=404)
+                return http.Response("Not found", status=404)
 
-            # Get status from webhook data
-            status = http.request.params.get("CallStatus", "")
-            duration = http.request.params.get("CallDuration", "")
-            
-            # Handle the status update
-            twilio_service = http.request.env["realestate.twilio.service"]
-            twilio_service.handle_call_status(call, status, duration)
+            status = request.httprequest.form.get("CallStatus")
+            duration = request.httprequest.form.get("CallDuration")
 
-            _logger.info(f"Call {call_id} status updated to {status}")
-            return http.Response("OK", status=200)
+            request.env["realestate.twilio.service"].sudo().handle_call_status(
+                call, status, duration
+            )
 
-        except Exception as e:
-            _logger.error(f"Error handling call status: {str(e)}")
-            return http.Response("Error processing request", status=500)
+            return http.Response("OK")
 
+        except Exception:
+            _logger.exception("Call status webhook failed")
+            return http.Response("Error", status=500)
+
+    # -------------------------------------------------
+    # RECORDING WEBHOOK
+    # -------------------------------------------------
     @http.route("/twilio/recording/<int:call_id>", type="http", auth="public", csrf=False, methods=["POST"])
     def handle_recording(self, call_id, **kwargs):
-        """Handle recording status updates from Twilio webhook"""
+
         try:
-            if not self._validate_twilio_request(**kwargs):
-                _logger.warning(f"Invalid Twilio signature for recording {call_id}")
+            if not self._validate_twilio_request():
                 return http.Response("Invalid signature", status=403)
 
-            call = http.request.env["realestate.call"].browse(call_id)
+            call = request.env["realestate.call"].sudo().browse(call_id)
             if not call.exists():
-                return http.Response("Call not found", status=404)
+                return http.Response("Not found", status=404)
 
-            # Fetch and save the recording
-            twilio_service = http.request.env["realestate.twilio.service"]
-            twilio_service.fetch_recording(call)
+            request.env["realestate.twilio.service"].sudo().fetch_recording(call)
 
-            _logger.info(f"Recording fetched for call {call_id}")
-            return http.Response("OK", status=200)
+            return http.Response("OK")
 
-        except Exception as e:
-            _logger.error(f"Error handling recording: {str(e)}")
-            return http.Response("Error processing request", status=500)
+        except Exception:
+            _logger.exception("Recording webhook failed")
+            return http.Response("Error", status=500)
 
+    # -------------------------------------------------
+    # TWIML CALL FLOW
+    # -------------------------------------------------
     @http.route("/twilio/call-handler/<int:call_id>", type="http", auth="public", csrf=False)
     def handle_call_flow(self, call_id, **kwargs):
-        """Generate TwiML response for call flow"""
-        try:
-            call = http.request.env["realestate.call"].browse(call_id)
-            if not call.exists():
-                twiml = '<Response><Say>Call not found</Say></Response>'
-                return http.Response(twiml, content_type="application/xml")
 
-            agent_number = http.request.params.get("agent_number", "")
-            
-            if not agent_number:
-                twiml = '<Response><Say>Agent number not provided</Say></Response>'
-                return http.Response(twiml, content_type="application/xml")
+        call = request.env["realestate.call"].sudo().browse(call_id)
 
-            # Generate TwiML to connect to agent
-            twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
+        if not call.exists():
+            return request.make_response(
+                "<Response><Say>Call not found</Say></Response>",
+                headers=[("Content-Type", "application/xml")]
+            )
+
+        agent_number = request.httprequest.values.get("agent_number")
+
+        if not agent_number:
+            return request.make_response(
+                "<Response><Say>No agent number</Say></Response>",
+                headers=[("Content-Type", "application/xml")]
+            )
+
+        base_url = request.httprequest.url_root.rstrip("/")
+
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say>Connecting you to your agent</Say>
-    <Dial recordingStatusCallback="{http.request.base_url}/twilio/recording/{call_id}">
+    <Say>Connecting call</Say>
+    <Dial recordingStatusCallback="{base_url}/twilio/recording/{call_id}">
         <Number>{agent_number}</Number>
     </Dial>
-</Response>'''
-            
-            return http.Response(twiml, content_type="application/xml")
+</Response>"""
 
-        except Exception as e:
-            _logger.error(f"Error handling call flow: {str(e)}")
-            twiml = '<Response><Say>An error occurred</Say></Response>'
-            return http.Response(twiml, content_type="application/xml")
+        return request.make_response(
+            twiml,
+            headers=[("Content-Type", "application/xml")]
+        )
 
+    # -------------------------------------------------
+    # MAKE CALL API
+    # -------------------------------------------------
     @http.route("/twilio/call-api/<int:call_id>/make", type="http", auth="user", methods=["POST"])
     def make_call_api(self, call_id, **kwargs):
-        """API endpoint to initiate a call via Twilio"""
+
         try:
-            call = http.request.env["realestate.call"].browse(call_id)
+            call = request.env["realestate.call"].sudo().browse(call_id)
             if not call.exists():
-                return http.Response(
-                    json.dumps({"status": "error", "message": "Call not found"}),
-                    content_type="application/json",
+                return request.make_response(
+                    json.dumps({"error": "not found"}),
+                    headers=[("Content-Type", "application/json")],
                     status=404
                 )
 
-            # Initiate call using Twilio service
-            twilio_service = http.request.env["realestate.twilio.service"]
-            twilio_service.make_call(call)
+            request.env["realestate.twilio.service"].sudo().make_call(call)
 
-            return http.Response(
-                json.dumps({"status": "success", "message": "Call initiated"}),
-                content_type="application/json"
+            return request.make_response(
+                json.dumps({"status": "ok"}),
+                headers=[("Content-Type", "application/json")]
             )
 
-        except ValidationError as e:
-            return http.Response(
-                json.dumps({"status": "error", "message": str(e)}),
-                content_type="application/json",
-                status=400
-            )
-        except Exception as e:
-            _logger.error(f"Error making call: {str(e)}")
-            return http.Response(
-                json.dumps({"status": "error", "message": str(e)}),
-                content_type="application/json",
+        except Exception:
+            _logger.exception("Make call failed")
+            return request.make_response(
+                json.dumps({"error": "server error"}),
+                headers=[("Content-Type", "application/json")],
                 status=500
             )
 
+    # -------------------------------------------------
+    # END CALL API
+    # -------------------------------------------------
     @http.route("/twilio/call-api/<int:call_id>/end", type="http", auth="user", methods=["POST"])
     def end_call_api(self, call_id, **kwargs):
-        """API endpoint to end a call via Twilio"""
+
         try:
-            call = http.request.env["realestate.call"].browse(call_id)
+            call = request.env["realestate.call"].sudo().browse(call_id)
             if not call.exists():
-                return http.Response(
-                    json.dumps({"status": "error", "message": "Call not found"}),
-                    content_type="application/json",
+                return request.make_response(
+                    json.dumps({"error": "not found"}),
+                    headers=[("Content-Type", "application/json")],
                     status=404
                 )
 
-            # End call using Twilio service
-            twilio_service = http.request.env["realestate.twilio.service"]
-            twilio_service.end_call(call)
+            request.env["realestate.twilio.service"].sudo().end_call(call)
 
-            return http.Response(
-                json.dumps({"status": "success", "message": "Call ended"}),
-                content_type="application/json"
+            return request.make_response(
+                json.dumps({"status": "ok"}),
+                headers=[("Content-Type", "application/json")]
             )
 
-        except ValidationError as e:
-            return http.Response(
-                json.dumps({"status": "error", "message": str(e)}),
-                content_type="application/json",
-                status=400
-            )
-        except Exception as e:
-            _logger.error(f"Error ending call: {str(e)}")
-            return http.Response(
-                json.dumps({"status": "error", "message": str(e)}),
-                content_type="application/json",
+        except Exception:
+            _logger.exception("End call failed")
+            return request.make_response(
+                json.dumps({"error": "server error"}),
+                headers=[("Content-Type", "application/json")],
                 status=500
             )

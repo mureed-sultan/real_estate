@@ -112,6 +112,17 @@ class ResConfigSettings(models.TransientModel):
         config_parameter="real_estate_twilio.auth_token",
         password=True,
     )
+    realestate_twilio_api_key = fields.Char(
+        string="Twilio API Key",
+        config_parameter="real_estate_twilio.api_key",
+        help="API Key SID from Twilio Console (https://www.twilio.com/console/project/api-keys)",
+    )
+    realestate_twilio_api_secret = fields.Char(
+        string="Twilio API Secret",
+        config_parameter="real_estate_twilio.api_secret",
+        password=True,
+        help="API Secret from Twilio Console (https://www.twilio.com/console/project/api-keys)",
+    )
     realestate_twilio_from_number = fields.Char(
         string="Twilio From Number",
         config_parameter="real_estate_twilio.from_number",
@@ -121,4 +132,9 @@ class ResConfigSettings(models.TransientModel):
         string="Enable Twilio VoIP",
         config_parameter="real_estate_twilio.enabled",
         help="Enable Twilio integration for click-to-call functionality",
+    )
+    realestate_twilio_gemini_api_key = fields.Char(
+        string="Twilio Gemini API Key",
+        config_parameter="real_estate_twilio.gemini_api_key",
+        help="Gemini API key for transcribing Twilio call recordings",
     )

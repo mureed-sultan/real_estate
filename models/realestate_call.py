@@ -61,6 +61,7 @@ class RealEstateCall(models.Model):
     voip_provider = fields.Selection([
         ("asterisk", "Asterisk"),
         ("twilio", "Twilio"),
+        ("manual", "Manual Upload"),
     ], string="VoIP Provider", tracking=True)
     company_id = fields.Many2one("res.company", string="Company", related="lead_id.company_id", store=True, readonly=True)
 
@@ -388,7 +389,7 @@ Analyze this real estate sales call transcript and classify the lead.
 Respond ONLY with a valid JSON object matching this structure:
 {
     "status": "hot" or "not_interested",
-    "reason": "a short one-sentence explanation in Roman Urdu or English"
+    "reason": "a short one-sentence explanation in Arabic or English"
 }
 
 Transcript:
@@ -588,6 +589,26 @@ Transcript:
 
         call.write(values)
         return call
+
+    def action_open_phone_interface(self):
+        """Open in-browser Twilio phone interface"""
+        self.ensure_one()
+        
+        twilio_enabled = self.env["ir.config_parameter"].sudo().get_param("real_estate_twilio.enabled")
+        if not twilio_enabled:
+            raise UserError(_("Twilio VoIP is not enabled. Please enable it in settings."))
+        
+        if not self.agent_id.twilio_phone_number:
+            raise UserError(
+                _("The assigned agent must have a Twilio phone number configured in their profile.")
+            )
+        
+        # Open phone interface in new window
+        return {
+            "type": "ir.actions.act_url",
+            "url": f"/twilio/call/{self.id}/phone-view",
+            "target": "new",
+        }
 
     def action_twilio_make_call(self):
         """Action button to make a call via Twilio"""

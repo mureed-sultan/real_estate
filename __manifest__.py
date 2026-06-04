@@ -25,10 +25,11 @@ agent performance reporting, and commission tracking.
         "views/agent_commission_views.xml",
         "views/agent_performance_views.xml",
         "views/crm_lead_views.xml",
+        "views/twilio_phone_view.xml",
         "views/menu_views.xml",
     ],
     "external_dependencies": {
-        "python": ["twilio"],
+        "python": ["twilio", "google-generativeai"],
     },
     "application": True,
     "installable": True,

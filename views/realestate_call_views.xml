@@ -27,6 +27,7 @@
         <field name="arch" type="xml">
             <form string="Call">
                 <header>
+                    <button name="action_open_phone_interface" type="object" string="Open Phone Call" class="oe_highlight" icon="fa-phone" groups="real_estate.group_realestate_manager" invisible="status == 'completed'"/>
                     <button name="action_twilio_make_call" type="object" string="Make Twilio Call" class="oe_highlight" icon="fa-phone" groups="real_estate.group_realestate_manager"/>
                     <button name="action_twilio_end_call" type="object" string="End Twilio Call" class="btn-danger" icon="fa-phone-slash" groups="real_estate.group_realestate_manager" invisible="not twilio_call_sid"/>
                     <button name="action_play_recording" type="object" string="Play Recording" class="oe_highlight" icon="fa-play" invisible="not recording_exists"/>

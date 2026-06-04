@@ -36,6 +36,15 @@
                     <field name="ai_last_call_id" readonly="1"/>
                     <field name="ai_transcript" readonly="1"/>
                 </group>
+
+                <group name="manual_audio_upload" string="Manual MP3 Upload">
+    <field name="manual_audio_attachment_id" 
+           options="{'accepted_mimetypes': ['audio/mpeg','audio/wav']}"/>
+    <button name="action_process_manual_audio" 
+            type="object" 
+            string="Process Audio" 
+            class="btn-primary"/>
+</group>
             </xpath>
             <xpath expr="//notebook/page[@name='internal_notes']" position="after">
                 <page string="Real Estate Notes" name="realestate_notes">

@@ -1,0 +1,545 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <template id="twilio_phone_view" name="Twilio Phone Call Interface">
+        <t t-call="web.layout">
+            <head>
+                <meta charset="UTF-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+                <title>Twilio Call Interface</title>
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css"/>
+                <style>
+                    body {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        min-height: 100vh;
+                        margin: 0;
+                        padding: 20px;
+                    }
+                    .phone-container {
+                        background: white;
+                        border-radius: 15px;
+                        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+                        max-width: 500px;
+                        width: 100%;
+                        padding: 40px;
+                        text-align: center;
+                    }
+                    .phone-header {
+                        margin-bottom: 30px;
+                        border-bottom: 2px solid #f0f0f0;
+                        padding-bottom: 20px;
+                    }
+                    .phone-header h2 {
+                        color: #333;
+                        margin-bottom: 5px;
+                        font-weight: 600;
+                    }
+                    .customer-info {
+                        font-size: 14px;
+                        color: #666;
+                        line-height: 1.6;
+                    }
+                    .status-display {
+                        margin: 20px 0;
+                        padding: 15px;
+                        background: #f8f9fa;
+                        border-radius: 8px;
+                        border-left: 4px solid #667eea;
+                    }
+                    #call-status {
+                        font-size: 16px;
+                        color: #333;
+                        font-weight: 500;
+                    }
+                    #call-timer {
+                        display: none;
+                        margin: 20px 0;
+                    }
+                    #timer {
+                        font-size: 48px;
+                        color: #667eea;
+                        font-weight: bold;
+                        font-family: 'Courier New', monospace;
+                        margin: 0;
+                    }
+                    .audio-section {
+                        margin: 20px 0;
+                    }
+                    audio {
+                        width: 100%;
+                        margin: 10px 0;
+                    }
+                    .btn-test {
+                        margin: 5px 2px;
+                        font-size: 12px;
+                        padding: 8px 12px;
+                    }
+                    .btn-group-main {
+                        display: flex;
+                        gap: 10px;
+                        justify-content: center;
+                        margin: 30px 0;
+                        flex-wrap: wrap;
+                    }
+                    .btn-call {
+                        background: #4CAF50 !important;
+                        border: none;
+                        padding: 15px 40px;
+                        font-size: 18px;
+                        border-radius: 50px;
+                        color: white;
+                        cursor: pointer;
+                        min-width: 150px;
+                        transition: all 0.3s;
+                    }
+                    .btn-call:hover {
+                        background: #45a049 !important;
+                        transform: scale(1.05);
+                    }
+                    .btn-end {
+                        background: #f44336 !important;
+                        border: none;
+                        padding: 15px 40px;
+                        font-size: 18px;
+                        border-radius: 50px;
+                        color: white;
+                        cursor: pointer;
+                        min-width: 150px;
+                        transition: all 0.3s;
+                        display: none;
+                    }
+                    .btn-end:hover {
+                        background: #da190b !important;
+                        transform: scale(1.05);
+                    }
+                    .btn-mute {
+                        background: #ff9800 !important;
+                        border: none;
+                        padding: 15px 40px;
+                        font-size: 18px;
+                        border-radius: 50px;
+                        color: white;
+                        cursor: pointer;
+                        min-width: 150px;
+                        display: none;
+                        transition: all 0.3s;
+                    }
+                    .btn-mute:hover {
+                        background: #e68900 !important;
+                    }
+                    .recording-indicator {
+                        display: none;
+                        margin: 20px 0;
+                        padding: 15px;
+                        background: #ffe0e0;
+                        border-left: 4px solid #f44336;
+                        border-radius: 5px;
+                    }
+                    .recording-dot {
+                        display: inline-block;
+                        width: 12px;
+                        height: 12px;
+                        background: #f44336;
+                        border-radius: 50%;
+                        animation: pulse 1s infinite;
+                        margin-right: 10px;
+                    }
+                    @keyframes pulse {
+                        0%, 100% { opacity: 1; }
+                        50% { opacity: 0.5; }
+                    }
+                    .notes-section {
+                        margin-top: 30px;
+                        text-align: left;
+                    }
+                    .notes-section textarea {
+                        width: 100%;
+                        padding: 10px;
+                        border: 1px solid #ddd;
+                        border-radius: 5px;
+                        font-family: 'Courier New', monospace;
+                    }
+                    .error-box {
+                        background: #ffebee;
+                        border: 1px solid #f44336;
+                        color: #c62828;
+                        padding: 15px;
+                        border-radius: 5px;
+                        margin: 20px 0;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="phone-container">
+                    <div class="phone-header">
+                        <h2>📞 Twilio Call Interface</h2>
+                        <p class="customer-info">
+                            <strong><t t-esc="customer_name"/></strong><br/>
+                            <t t-esc="customer_number"/>
+                        </p>
+                    </div>
+
+                    <div id="error-box" class="error-box" style="display: none;"></div>
+
+                    <div class="status-display">
+                        <h5 id="call-status">Ready to call</h5>
+                    </div>
+
+                    <div id="call-timer" class="call-timer">
+                        <h3 id="timer">00:00:00</h3>
+                    </div>
+
+                    <div class="audio-section">
+                        <audio id="audio-element" autoplay="true"></audio>
+                    </div>
+
+                    <div class="audio-section">
+                        <button class="btn btn-info btn-test" onclick="testAudio()">
+                            🔊 Test Speaker
+                        </button>
+                        <button class="btn btn-info btn-test" onclick="testMicrophone()">
+                            🎤 Test Microphone
+                        </button>
+                    </div>
+
+                    <div class="btn-group-main">
+                        <button id="call-btn" class="btn-call" onclick="makeCall()">
+                            ☎️ Call
+                        </button>
+                        <button id="end-btn" class="btn-end" onclick="endCall()">
+                            ✖️ End Call
+                        </button>
+                        <button id="mute-btn" class="btn-mute" onclick="toggleMute()">
+                            🔇 Mute
+                        </button>
+                    </div>
+
+                    <div id="recording-status" class="recording-indicator">
+                        <span class="recording-dot"></span>
+                        <span id="recording-text">Recording in progress...</span>
+                    </div>
+
+                    <div class="notes-section">
+                        <label>📝 Call Notes:</label>
+                        <textarea id="call-notes" rows="3" placeholder="Add notes about the call..."></textarea>
+                    </div>
+                </div>
+
+                <script src="https://sdk.twilio.com/js/client/v1.6/twilio.js"></script>
+                <script>
+                    const callId = <t t-esc="call.id"/>;
+                    const customerNumber = '<t t-esc="customer_number"/>';
+                    const customerName = '<t t-esc="customer_name"/>';
+                    
+                    let device;
+                    let activeConnection;
+                    let mediaRecorder;
+                    let audioChunks = [];
+                    let timerInterval;
+                    let callStartTime;
+                    let isMuted = false;
+
+                    // Initialize on page load
+                    document.addEventListener('DOMContentLoaded', function() {
+                        _log('Initializing Twilio phone interface...');
+                        initializeTwilio();
+                    });
+
+                    function _log(msg) {
+                        console.log('[Twilio] ' + msg);
+                    }
+
+                    function _error(msg) {
+                        console.error('[Twilio Error] ' + msg);
+                        showError(msg);
+                    }
+
+                    function showError(msg) {
+                        const errorBox = document.getElementById('error-box');
+                        errorBox.textContent = msg;
+                        errorBox.style.display = 'block';
+                    }
+
+                    async function initializeTwilio() {
+                        try {
+                            _log('Fetching Twilio token...');
+                            
+                            // Get Twilio token
+                            const response = await fetch(`/twilio/call/${callId}/token`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                            });
+
+                            const data = await response.json();
+                            _log('Token response: ' + JSON.stringify(data));
+
+                            if (data.error) {
+                                _error(`Token Error: ${data.error}`);
+                                updateStatus(`❌ Error: ${data.error}`);
+                                return;
+                            }
+
+                            if (!data.token) {
+                                _error('No token received from server');
+                                updateStatus('❌ No token received');
+                                return;
+                            }
+
+                            _log('Setting up Twilio Device...');
+                            
+                            // Initialize Twilio Device
+                            Twilio.Device.setup(data.token, {
+                                logLevel: 1,
+                            });
+
+                            device = Twilio.Device;
+
+                            device.on('ready', function() {
+                                _log('Device is ready');
+                                updateStatus('✅ Ready to call - Click Call button');
+                                document.getElementById('call-btn').disabled = false;
+                            });
+
+                            device.on('error', function(error) {
+                                _error(`Device error: ${error.message}`);
+                                updateStatus(`❌ Device error: ${error.message}`);
+                                console.error('Device error:', error);
+                            });
+
+                            device.on('connect', function(connection) {
+                                _log('Call connected');
+                                activeConnection = connection;
+                                updateStatus('✅ Call connected');
+                                document.getElementById('call-btn').style.display = 'none';
+                                document.getElementById('end-btn').style.display = 'block';
+                                document.getElementById('mute-btn').style.display = 'block';
+                                document.getElementById('call-timer').style.display = 'block';
+                                document.getElementById('recording-status').style.display = 'block';
+
+                                startCallTimer();
+                                startRecording();
+                                updateCallStatus('answered');
+                            });
+
+                            device.on('disconnect', function(connection) {
+                                _log('Call disconnected');
+                                updateStatus('📞 Call disconnected');
+                                document.getElementById('call-btn').style.display = 'block';
+                                document.getElementById('end-btn').style.display = 'none';
+                                document.getElementById('mute-btn').style.display = 'none';
+                                document.getElementById('call-timer').style.display = 'none';
+                                document.getElementById('recording-status').style.display = 'none';
+
+                                clearInterval(timerInterval);
+                                stopRecording();
+                                updateCallStatus('completed');
+                            });
+
+                            device.on('incoming', function(connection) {
+                                _log('Incoming call');
+                                updateStatus('📲 Incoming call...');
+                                connection.accept();
+                            });
+
+                        } catch (error) {
+                            _error(`Initialization error: ${error.message}`);
+                            updateStatus(`❌ Init Error: ${error.message}`);
+                            console.error('Initialization error:', error);
+                        }
+                    }
+
+                    function makeCall() {
+                        _log('Making call to ' + customerNumber);
+                        
+                        if (!device) {
+                            _error('Device not initialized');
+                            updateStatus('❌ Device not ready');
+                            return;
+                        }
+
+                        if (!customerNumber) {
+                            _error('No customer phone number');
+                            updateStatus('❌ No phone number');
+                            return;
+                        }
+
+                        const params = { To: customerNumber };
+
+                        updateStatus('📞 Calling...');
+                        updateCallStatus('ringing');
+                        
+                        try {
+                            device.connect(params);
+                        } catch (err) {
+                            _error(`Call error: ${err.message}`);
+                            updateStatus(`❌ ${err.message}`);
+                        }
+                    }
+
+                    function endCall() {
+                        _log('Ending call');
+                        if (activeConnection) {
+                            activeConnection.disconnect();
+                            activeConnection = null;
+                        }
+                    }
+
+                    function toggleMute() {
+                        if (activeConnection) {
+                            isMuted = !isMuted;
+                            activeConnection.mute(isMuted);
+                            document.getElementById('mute-btn').classList.toggle('active', isMuted);
+                            _log('Mute: ' + (isMuted ? 'ON' : 'OFF'));
+                        }
+                    }
+
+                    function startCallTimer() {
+                        callStartTime = Date.now();
+                        timerInterval = setInterval(function() {
+                            const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+                            const hours = Math.floor(elapsed / 3600);
+                            const minutes = Math.floor((elapsed % 3600) / 60);
+                            const seconds = elapsed % 60;
+                            document.getElementById('timer').textContent =
+                                String(hours).padStart(2, '0') + ':' +
+                                String(minutes).padStart(2, '0') + ':' +
+                                String(seconds).padStart(2, '0');
+                        }, 1000);
+                    }
+
+                    function startRecording() {
+                        _log('Starting recording...');
+                        try {
+                            navigator.mediaDevices.getUserMedia({ audio: true })
+                                .then(stream => {
+                                    mediaRecorder = new MediaRecorder(stream);
+                                    audioChunks = [];
+
+                                    mediaRecorder.ondataavailable = (event) => {
+                                        audioChunks.push(event.data);
+                                    };
+
+                                    mediaRecorder.onstop = () => {
+                                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                                        _log('Recording stopped, saving...');
+                                        saveRecording(audioBlob);
+                                        stream.getTracks().forEach(track => track.stop());
+                                    };
+
+                                    mediaRecorder.start();
+                                    _log('Recording started');
+                                    document.getElementById('recording-text').textContent = 'Recording in progress...';
+                                })
+                                .catch(error => {
+                                    _error(`Microphone access denied: ${error.message}`);
+                                    updateStatus('❌ Microphone access denied');
+                                });
+                        } catch (error) {
+                            _error(`Recording start error: ${error.message}`);
+                        }
+                    }
+
+                    function stopRecording() {
+                        if (mediaRecorder &amp;&amp; mediaRecorder.state !== 'inactive') {
+                            _log('Stopping recorder...');
+                            mediaRecorder.stop();
+                        }
+                    }
+
+                    async function saveRecording(audioBlob) {
+                        try {
+                            _log('Converting recording to base64...');
+                            const reader = new FileReader();
+                            reader.onload = async function(e) {
+                                const recordingBlob = e.target.result;
+
+                                _log('Sending recording to server...');
+                                const response = await fetch(`/twilio/call/${callId}/save-recording`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        recordingBlob: recordingBlob,
+                                    }),
+                                });
+
+                                const data = await response.json();
+
+                                if (data.success) {
+                                    _log('Recording saved successfully');
+                                    updateStatus('✅ Recording saved and being transcribed with Gemini AI...');
+                                    document.getElementById('recording-text').textContent = 
+                                        'Processing recording...';
+                                } else {
+                                    _error(`Save failed: ${data.error}`);
+                                }
+                            };
+                            reader.readAsDataURL(audioBlob);
+                        } catch (error) {
+                            _error(`Save recording error: ${error.message}`);
+                        }
+                    }
+
+                    function testAudio() {
+                        _log('Testing speaker...');
+                        // Play a test tone
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioContext.createOscillator();
+                        const gainNode = audioContext.createGain();
+
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+
+                        oscillator.frequency.value = 1000;
+                        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+
+                        oscillator.start(audioContext.currentTime);
+                        oscillator.stop(audioContext.currentTime + 1);
+
+                        updateStatus('🔊 Speaker test - you should hear a tone');
+                    }
+
+                    async function testMicrophone() {
+                        _log('Testing microphone...');
+                        try {
+                            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            stream.getTracks().forEach(track => track.stop());
+                            updateStatus('✅ Microphone working!');
+                            _log('Microphone test successful');
+                        } catch (error) {
+                            _error(`Microphone test failed: ${error.message}`);
+                            updateStatus(`❌ Microphone test failed: ${error.message}`);
+                        }
+                    }
+
+                    function updateStatus(message) {
+                        _log('Status: ' + message);
+                        document.getElementById('call-status').textContent = message;
+                    }
+
+                    async function updateCallStatus(status) {
+                        try {
+                            await fetch(`/twilio/call/${callId}/update-status`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ status: status }),
+                            });
+                            _log('Call status updated to: ' + status);
+                        } catch (error) {
+                            console.error('Status update error:', error);
+                        }
+                    }
+                </script>
+            </body>
+        </t>
+    </template>
+</odoo>
