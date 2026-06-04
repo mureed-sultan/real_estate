@@ -43,6 +43,7 @@ class CrmLead(models.Model):
         ("unknown", "Unknown"),
     ], string="AI Lead Status", default="unknown", tracking=True)
     ai_reason = fields.Text(string="AI Reason", tracking=True)
+    ai_transcript = fields.Text(string="AI Transcript", tracking=True)
     ai_last_call_id = fields.Many2one("realestate.call", string="Last AI Call", readonly=True)
 
     @api.model_create_multi

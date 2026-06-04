@@ -76,6 +76,19 @@ class ResConfigSettings(models.TransientModel):
         default="gemini-2.5-flash",
         config_parameter="real_estate_ai.gemini_model",
     )
+    realestate_stt_provider = fields.Selection(
+        [
+            ("whisper", "OpenAI Whisper (Local)"),
+            ("google", "Google Cloud Speech-to-Text"),
+        ],
+        string="Speech-to-Text Provider",
+        default="whisper",
+        config_parameter="real_estate_ai.stt_provider",
+    )
+    realestate_google_api_key = fields.Char(
+        string="Google Cloud Speech API Key",
+        config_parameter="real_estate_ai.google_api_key",
+    )
     realestate_whisper_model = fields.Selection(
         [
             ("tiny", "Tiny"),
@@ -87,4 +100,25 @@ class ResConfigSettings(models.TransientModel):
         string="Whisper Model",
         default="base",
         config_parameter="real_estate_ai.whisper_model",
+    )
+    
+    # Twilio Settings
+    realestate_twilio_account_sid = fields.Char(
+        string="Twilio Account SID",
+        config_parameter="real_estate_twilio.account_sid",
+    )
+    realestate_twilio_auth_token = fields.Char(
+        string="Twilio Auth Token",
+        config_parameter="real_estate_twilio.auth_token",
+        password=True,
+    )
+    realestate_twilio_from_number = fields.Char(
+        string="Twilio From Number",
+        config_parameter="real_estate_twilio.from_number",
+        help="Phone number in E.164 format (e.g., +12125552368)",
+    )
+    realestate_twilio_enabled = fields.Boolean(
+        string="Enable Twilio VoIP",
+        config_parameter="real_estate_twilio.enabled",
+        help="Enable Twilio integration for click-to-call functionality",
     )

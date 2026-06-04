@@ -9,6 +9,7 @@
                 <separator string="Real Estate VOIP" groups="real_estate.group_realestate_manager"/>
                 <field name="asterisk_extension" groups="real_estate.group_realestate_manager"/>
                 <field name="asterisk_caller_id" groups="real_estate.group_realestate_manager"/>
+                <field name="twilio_phone_number" groups="real_estate.group_realestate_manager"/>
                 <field name="realestate_commission_percent" groups="real_estate.group_realestate_manager"/>
             </xpath>
         </field>

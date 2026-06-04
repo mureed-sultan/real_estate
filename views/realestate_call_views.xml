@@ -27,8 +27,12 @@
         <field name="arch" type="xml">
             <form string="Call">
                 <header>
+                    <button name="action_twilio_make_call" type="object" string="Make Twilio Call" class="oe_highlight" icon="fa-phone" groups="real_estate.group_realestate_manager"/>
+                    <button name="action_twilio_end_call" type="object" string="End Twilio Call" class="btn-danger" icon="fa-phone-slash" groups="real_estate.group_realestate_manager" invisible="not twilio_call_sid"/>
                     <button name="action_play_recording" type="object" string="Play Recording" class="oe_highlight" icon="fa-play" invisible="not recording_exists"/>
                     <button name="action_download_recording" type="object" string="Download Recording" icon="fa-download" invisible="not recording_exists"/>
+                    <button name="action_transcribe_recording" type="object" string="Transcribe Call" class="btn-secondary" icon="fa-file-text-o" invisible="not recording_exists"/>
+                    <button name="action_analyze_transcript" type="object" string="AI Analyze" class="btn-secondary" icon="fa-magic" invisible="not transcript_text"/>
                     <field name="status" widget="statusbar" statusbar_visible="queued,ringing,answered,completed,missed,failed"/>
                 </header>
                 <sheet>
@@ -55,9 +59,32 @@
                         <field name="recording_exists" readonly="1"/>
                         <field name="recording_format"/>
                         <field name="recording_path"/>
+                        <field name="recording_attachment_id" readonly="1"/>
                         <field name="ami_action_id" readonly="1"/>
                         <field name="asterisk_unique_id"/>
                     </group>
+                    <group string="VoIP Provider">
+                        <field name="voip_provider"/>
+                        <field name="twilio_call_sid" readonly="1" invisible="voip_provider != 'twilio'"/>
+                    </group>
+                    <notebook>
+                        <page string="Transcription &amp; AI Analysis" name="transcription_ai">
+                            <group>
+                                <group string="Speech-to-Text">
+                                    <field name="transcript_source"/>
+                                    <field name="transcript_text" placeholder="Call transcript will appear here..."/>
+                                </group>
+                                <group string="AI Evaluation">
+                                    <field name="ai_lead_status" widget="badge" decoration-success="ai_lead_status == 'hot'" decoration-danger="ai_lead_status == 'not_interested'"/>
+                                    <field name="ai_reason"/>
+                                    <field name="ai_analyzed_at"/>
+                                </group>
+                            </group>
+                            <group string="Raw AI Response" groups="base.group_no_one">
+                                <field name="ai_raw_response"/>
+                            </group>
+                        </page>
+                    </notebook>
                 </sheet>
                 <chatter/>
             </form>

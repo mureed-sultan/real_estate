@@ -1,4 +1,5 @@
 import json
+import logging
 import mimetypes
 import os
 import urllib.error
@@ -8,6 +9,8 @@ from datetime import timedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 
 class RealEstateCall(models.Model):
@@ -35,12 +38,14 @@ class RealEstateCall(models.Model):
     ], string="Status", default="queued", required=True, index=True, tracking=True)
     recording_path = fields.Char(string="Recording Path", tracking=True)
     recording_format = fields.Selection([("wav", "WAV"), ("mp3", "MP3")], string="Recording Format", default="wav")
+    recording_attachment_id = fields.Many2one("ir.attachment", string="Recording Attachment", ondelete="set null", tracking=True)
     recording_exists = fields.Boolean(string="Recording Exists", compute="_compute_recording_exists")
     recording_mimetype = fields.Char(string="Recording MIME Type", compute="_compute_recording_mimetype")
     transcript_text = fields.Text(string="Transcript", tracking=True)
     transcript_source = fields.Selection([
         ("manual", "Manual"),
-        ("whisper", "Whisper"),
+        ("whisper", "Whisper (Local)"),
+        ("google", "Google STT"),
     ], string="Transcript Source", default="manual")
     ai_lead_status = fields.Selection([
         ("hot", "Hot"),
@@ -52,6 +57,11 @@ class RealEstateCall(models.Model):
     ai_raw_response = fields.Text(string="AI Raw Response", readonly=True)
     ami_action_id = fields.Char(string="AMI Action ID", index=True, copy=False)
     asterisk_unique_id = fields.Char(string="Asterisk Unique ID", index=True, copy=False)
+    twilio_call_sid = fields.Char(string="Twilio Call SID", index=True, copy=False, readonly=True)
+    voip_provider = fields.Selection([
+        ("asterisk", "Asterisk"),
+        ("twilio", "Twilio"),
+    ], string="VoIP Provider", tracking=True)
     company_id = fields.Many2one("res.company", string="Company", related="lead_id.company_id", store=True, readonly=True)
 
     @api.model_create_multi
@@ -65,12 +75,25 @@ class RealEstateCall(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
+        # Track calls whose status is being modified
+        calls_to_finalize = self.env["realestate.call"]
+        if "status" in vals:
+            for call in self:
+                if call.status != vals["status"]:
+                    calls_to_finalize |= call
+
         result = super().write(vals)
         if {"start_time", "end_time"} & set(vals) and "duration" not in vals:
             for call in self.filtered(lambda item: item.start_time and item.end_time):
                 duration = max(0, int((call.end_time - call.start_time).total_seconds()))
                 if call.duration != duration:
                     super(RealEstateCall, call).write({"duration": duration})
+
+        # Run post-call processing for completed calls
+        if calls_to_finalize:
+            for call in calls_to_finalize:
+                call._post_call_processing()
+
         return result
 
     def _format_seconds(self, seconds):
@@ -94,15 +117,20 @@ class RealEstateCall(models.Model):
 
     def _compute_recording_exists(self):
         for call in self:
-            call.recording_exists = call._recording_file_exists()
+            call.recording_exists = bool(call.recording_attachment_id) or call._recording_file_exists()
 
     def _compute_recording_mimetype(self):
         for call in self:
-            mimetype, _encoding = mimetypes.guess_type(call.recording_path or "")
-            call.recording_mimetype = mimetype or "application/octet-stream"
+            if call.recording_attachment_id:
+                call.recording_mimetype = call.recording_attachment_id.mimetype or "application/octet-stream"
+            else:
+                mimetype, _encoding = mimetypes.guess_type(call.recording_path or "")
+                call.recording_mimetype = mimetype or "application/octet-stream"
 
     def _ensure_recording_available(self):
         self.ensure_one()
+        if self.recording_attachment_id:
+            return True
         if not self._recording_file_exists():
             raise UserError(_("The recording file is not available on the server."))
         return os.path.realpath(os.path.expanduser(self.recording_path))
@@ -125,28 +153,226 @@ class RealEstateCall(models.Model):
             "target": "self",
         }
 
+    def _convert_wav_to_mp3(self, wav_path):
+        """Converts a WAV file to MP3. Returns the path to the MP3 file or False if conversion failed."""
+        if not wav_path or not os.path.exists(wav_path):
+            return False
+        mp3_path = os.path.splitext(wav_path)[0] + ".mp3"
+        if os.path.exists(mp3_path):
+            return mp3_path
+
+        # Try using pydub
+        try:
+            from pydub import AudioSegment
+            sound = AudioSegment.from_wav(wav_path)
+            sound.export(mp3_path, format="mp3")
+            _logger.info("Successfully converted %s to MP3 using pydub", wav_path)
+            return mp3_path
+        except Exception as e:
+            _logger.debug("pydub conversion failed: %s. Trying ffmpeg...", e)
+
+        # Try using subprocess ffmpeg
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", wav_path, "-codec:a", "libmp3lame", "-qscale:a", "2", mp3_path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            if result.returncode == 0 and os.path.exists(mp3_path):
+                _logger.info("Successfully converted %s to MP3 using ffmpeg and libmp3lame", wav_path)
+                return mp3_path
+        except Exception as e:
+            _logger.debug("ffmpeg libmp3lame conversion failed: %s. Trying fallback ffmpeg...", e)
+
+        # Try using subprocess ffmpeg with default encoder if libmp3lame is missing
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", wav_path, mp3_path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            if result.returncode == 0 and os.path.exists(mp3_path):
+                _logger.info("Successfully converted %s to MP3 using fallback ffmpeg", wav_path)
+                return mp3_path
+        except Exception as e:
+            _logger.warning("All WAV to MP3 conversion attempts failed for %s: %s", wav_path, e)
+
+        return False
+
+    def _save_recording_as_attachment(self):
+        self.ensure_one()
+        if not self.recording_path:
+            return False
+
+        path = os.path.realpath(os.path.expanduser(self.recording_path))
+        if not os.path.exists(path):
+            _logger.warning("Recording file not found on disk at path: %s", path)
+            return False
+
+        # Convert to MP3 if it's WAV
+        if path.lower().endswith(".wav"):
+            mp3_path = self._convert_wav_to_mp3(path)
+            if mp3_path and os.path.exists(mp3_path):
+                path = mp3_path
+
+        filename = os.path.basename(path)
+        mimetype = "audio/mpeg" if filename.lower().endswith(".mp3") else "audio/wav"
+
+        with open(path, "rb") as f:
+            data = f.read()
+
+        import base64
+        attachment = self.env["ir.attachment"].create({
+            "name": filename,
+            "type": "binary",
+            "datas": base64.b64encode(data),
+            "res_model": "crm.lead" if self.lead_id else "realestate.call",
+            "res_id": self.lead_id.id if self.lead_id else self.id,
+            "mimetype": mimetype,
+        })
+
+        self.write({
+            "recording_attachment_id": attachment.id,
+        })
+
+        if self.lead_id:
+            self.lead_id.message_post(
+                body=_("Call recording saved: %s") % filename,
+                attachment_ids=[attachment.id]
+            )
+        return attachment
+
+    def _get_audio_data_and_ext(self):
+        """Returns (audio_bytes, file_extension, temp_filepath, is_temp).
+        temp_filepath should be cleaned up by the caller if is_temp is True.
+        """
+        self.ensure_one()
+        if self.recording_attachment_id:
+            import base64
+            import tempfile
+            data = base64.b64decode(self.recording_attachment_id.datas or b"")
+            filename = self.recording_attachment_id.name or "recording.mp3"
+            ext = os.path.splitext(filename)[1].replace(".", "") or "mp3"
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix="." + ext)
+            temp_file.write(data)
+            temp_file.close()
+            return data, ext, temp_file.name, True
+
+        path = self._ensure_recording_available()
+        # If it returned True because attachment exists but path is missing, handle gracefully
+        if path is True:
+            raise UserError(_("Recording path could not be resolved from attachment."))
+        ext = os.path.splitext(path)[1].replace(".", "") or "wav"
+        with open(path, "rb") as f:
+            data = f.read()
+        return data, ext, path, False
+
+    def _transcribe_google_stt(self, audio_data, file_ext):
+        api_key = self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.google_api_key")
+        if not api_key:
+            raise UserError(_("Google Cloud Speech API Key is not configured in settings."))
+
+        import base64
+        import json
+        import urllib.request
+        import urllib.error
+
+        audio_content = base64.b64encode(audio_data).decode("utf-8")
+        encoding = "MP3" if file_ext.lower() == "mp3" else "LINEAR16"
+
+        payload = {
+            "config": {
+                "encoding": encoding,
+                "sampleRateHertz": 16000,
+                "languageCode": "en-US",
+                "alternativeLanguageCodes": ["ur-PK"],
+            },
+            "audio": {
+                "content": audio_content
+            }
+        }
+
+        endpoint = "https://speech.googleapis.com/v1/speech:recognize?key=%s" % api_key
+        request_data = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        http_request = urllib.request.Request(endpoint, data=request_data, headers=headers, method="POST")
+
+        try:
+            with urllib.request.urlopen(http_request, timeout=60) as response:
+                response_data = json.loads(response.read().decode("utf-8"))
+
+            transcript_parts = []
+            results = response_data.get("results", [])
+            for result in results:
+                alternatives = result.get("alternatives", [])
+                if alternatives:
+                    transcript_parts.append(alternatives[0].get("transcript", ""))
+            return " ".join(transcript_parts).strip()
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            raise UserError(_("Google STT failed (%s): %s") % (error.code, body)) from error
+        except Exception as error:
+            raise UserError(_("Google STT failed: %s") % error) from error
+
+    def _transcribe_recording_auto(self):
+        self.ensure_one()
+        provider = self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.stt_provider", "whisper")
+
+        if provider == "google":
+            data, ext, path, is_temp = self._get_audio_data_and_ext()
+            try:
+                transcript = self._transcribe_google_stt(data, ext)
+            finally:
+                if is_temp and os.path.exists(path):
+                    try:
+                        os.unlink(path)
+                    except Exception:
+                        pass
+            self.write({
+                "transcript_text": transcript,
+                "transcript_source": "google",
+            })
+            return True
+        else:
+            # Whisper local
+            data, ext, path, is_temp = self._get_audio_data_and_ext()
+            try:
+                import librosa
+                import whisper
+            except ImportError as error:
+                if is_temp and os.path.exists(path):
+                    try:
+                        os.unlink(path)
+                    except Exception:
+                        pass
+                raise UserError(_("Install optional Python packages openai-whisper and librosa on the Odoo server to use local transcription.")) from error
+
+            model_name = self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.whisper_model", "base") or "base"
+            try:
+                model = whisper.load_model(model_name)
+                audio_array, _sample_rate = librosa.load(path, sr=16000)
+                result = model.transcribe(audio_array, fp16=False)
+                transcript = (result or {}).get("text", "").strip()
+            except Exception as error:
+                raise UserError(_("Whisper transcription failed: %s") % error) from error
+            finally:
+                if is_temp and os.path.exists(path):
+                    try:
+                        os.unlink(path)
+                    except Exception:
+                        pass
+
+            self.write({
+                "transcript_text": transcript,
+                "transcript_source": "whisper",
+            })
+            return True
+
     def action_transcribe_recording(self):
         self.ensure_one()
-        path = self._ensure_recording_available()
-        try:
-            import librosa
-            import whisper
-        except ImportError as error:
-            raise UserError(_("Install optional Python packages openai-whisper and librosa on the Odoo server to use local transcription.")) from error
-
-        model_name = self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.whisper_model", "base") or "base"
-        try:
-            model = whisper.load_model(model_name)
-            audio_array, _sample_rate = librosa.load(path, sr=16000)
-            result = model.transcribe(audio_array, fp16=False)
-        except Exception as error:
-            raise UserError(_("Whisper transcription failed: %s") % error) from error
-
-        transcript = (result or {}).get("text", "").strip()
-        self.write({
-            "transcript_text": transcript,
-            "transcript_source": "whisper",
-        })
+        self._transcribe_recording_auto()
         return True
 
     def _gemini_api_key(self):
@@ -217,12 +443,43 @@ Transcript:
             "ai_raw_response": json.dumps(response_data, indent=2),
         }
         self.write(values)
-        self.lead_id.write({
-            "ai_lead_status": status,
-            "ai_reason": result.get("reason"),
-            "ai_last_call_id": self.id,
-        })
+        if self.lead_id:
+            self.lead_id.write({
+                "ai_lead_status": status,
+                "ai_reason": result.get("reason"),
+                "ai_transcript": self.transcript_text,
+                "ai_last_call_id": self.id,
+            })
         return result
+
+    def _run_automated_transcription_and_analysis(self):
+        """Runs the automated transcription and analysis pipeline without raising blocker exceptions."""
+        self.ensure_one()
+        try:
+            # 1. Transcribe
+            self._transcribe_recording_auto()
+            # 2. Analyze
+            if self.transcript_text:
+                self._analyze_transcript()
+            else:
+                self.message_post(body=_("Automated analysis skipped: Transcript is empty."))
+        except Exception as e:
+            _logger.exception("Failed automated call transcription/analysis for call %s", self.id)
+            self.message_post(body=_("Automated Call Processing failed: %s") % str(e))
+
+    def _post_call_processing(self):
+        self.ensure_one()
+        # 1. Save recording as attachment (which will convert WAV to MP3 if needed)
+        if self.status == "completed" and self.recording_path:
+            try:
+                self._save_recording_as_attachment()
+            except Exception as e:
+                _logger.exception("Failed to save call recording as attachment for call %s", self.id)
+                self.message_post(body=_("Failed to save/convert recording to attachment: %s") % str(e))
+
+        # 2. Trigger transcription and AI analysis automatically
+        if self.status == "completed":
+            self._run_automated_transcription_and_analysis()
 
     def _wav_duration(self, path):
         try:
@@ -331,3 +588,45 @@ Transcript:
 
         call.write(values)
         return call
+
+    def action_twilio_make_call(self):
+        """Action button to make a call via Twilio"""
+        self.ensure_one()
+        
+        twilio_enabled = self.env["ir.config_parameter"].sudo().get_param("real_estate_twilio.enabled")
+        if not twilio_enabled:
+            raise UserError(_("Twilio VoIP is not enabled. Please enable it in settings."))
+        
+        service = self.env["realestate.twilio.service"]
+        self.voip_provider = "twilio"
+        service.make_call(self)
+        
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Call Initiated"),
+                "message": _("Twilio call has been initiated. Check your phone."),
+                "sticky": False,
+            },
+        }
+
+    def action_twilio_end_call(self):
+        """Action button to end an active Twilio call"""
+        self.ensure_one()
+        
+        if not self.twilio_call_sid:
+            raise UserError(_("This call does not have a Twilio Call SID."))
+        
+        service = self.env["realestate.twilio.service"]
+        service.end_call(self)
+        
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Call Ended"),
+                "message": _("Twilio call has been ended."),
+                "sticky": False,
+            },
+        }

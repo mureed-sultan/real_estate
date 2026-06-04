@@ -70,6 +70,50 @@
                     <setting string="Commission" help="Default percentage used when an agent does not have a custom value.">
                         <field name="realestate_default_commission_percent"/>
                     </setting>
+                    <setting string="AI &amp; Speech to Text" help="Configure Google Speech-to-Text and Gemini API key.">
+                        <div class="content-group">
+                            <div class="row mt16">
+                                <label for="realestate_stt_provider" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_stt_provider"/>
+                            </div>
+                            <div class="row" invisible="realestate_stt_provider != 'google'">
+                                <label for="realestate_google_api_key" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_google_api_key" password="True"/>
+                            </div>
+                            <div class="row" invisible="realestate_stt_provider != 'whisper'">
+                                <label for="realestate_whisper_model" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_whisper_model"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_gemini_api_key" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_gemini_api_key" password="True"/>
+                            </div>
+                            <div class="row">
+                                <label for="realestate_gemini_model" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_gemini_model"/>
+                            </div>
+                        </div>
+                    </setting>
+                    <setting string="Twilio VoIP" help="Configure Twilio as an alternative VoIP provider.">
+                        <div class="content-group">
+                            <div class="row mt16">
+                                <label for="realestate_twilio_enabled" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_twilio_enabled"/>
+                            </div>
+                            <div class="row" invisible="not realestate_twilio_enabled">
+                                <label for="realestate_twilio_account_sid" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_twilio_account_sid"/>
+                            </div>
+                            <div class="row" invisible="not realestate_twilio_enabled">
+                                <label for="realestate_twilio_auth_token" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_twilio_auth_token" password="True"/>
+                            </div>
+                            <div class="row" invisible="not realestate_twilio_enabled">
+                                <label for="realestate_twilio_from_number" class="col-lg-4 o_light_label"/>
+                                <field name="realestate_twilio_from_number"/>
+                            </div>
+                        </div>
+                    </setting>
                 </block>
             </xpath>
         </field>

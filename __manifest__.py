@@ -9,7 +9,7 @@ agent performance reporting, and commission tracking.
     "author": "Zavior Tech",
     "website": "https://www.zavior.org",
     "category": "Sales/CRM",
-    "version": "19.0.1.0.0",
+    "version": "19.0.2.0.0",
     "license": "LGPL-3",
     "depends": [
         "crm",
@@ -27,6 +27,9 @@ agent performance reporting, and commission tracking.
         "views/crm_lead_views.xml",
         "views/menu_views.xml",
     ],
+    "external_dependencies": {
+        "python": ["twilio"],
+    },
     "application": True,
     "installable": True,
 }

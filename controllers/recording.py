@@ -23,9 +23,24 @@ class RealEstateRecordingController(http.Controller):
         except AccessError:
             return request.not_found()
 
+        download = request.httprequest.path.endswith("/download")
+
+        # 1. Serve from database attachment if available
+        if call.recording_attachment_id:
+            import base64
+            attachment = call.recording_attachment_id
+            filename = attachment.name
+            mimetype = attachment.mimetype or "application/octet-stream"
+            headers = [
+                ("Content-Type", mimetype),
+                ("Content-Disposition", content_disposition(filename, disposition_type="attachment" if download else "inline")),
+            ]
+            filecontent = base64.b64decode(attachment.datas or b"")
+            return request.make_response(filecontent, headers=headers)
+
+        # 2. Fallback to server filesystem
         path = call._ensure_recording_available()
         filename = os.path.basename(path)
-        download = request.httprequest.path.endswith("/download")
         mimetype = mimetypes.guess_type(path)[0] or call.recording_mimetype or "application/octet-stream"
         headers = [
             ("Content-Type", mimetype),

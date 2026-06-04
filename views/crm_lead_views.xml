@@ -30,6 +30,12 @@
                     <field name="assigned_agent_id" widget="many2one_avatar_user"/>
                     <field name="realestate_total_call_duration_display" readonly="1"/>
                 </group>
+                <group name="ai_evaluation" string="AI Evaluation">
+                    <field name="ai_lead_status" widget="badge" decoration-success="ai_lead_status == 'hot'" decoration-danger="ai_lead_status == 'not_interested'"/>
+                    <field name="ai_reason" readonly="1"/>
+                    <field name="ai_last_call_id" readonly="1"/>
+                    <field name="ai_transcript" readonly="1"/>
+                </group>
             </xpath>
             <xpath expr="//notebook/page[@name='internal_notes']" position="after">
                 <page string="Real Estate Notes" name="realestate_notes">

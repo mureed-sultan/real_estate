@@ -86,7 +86,7 @@ class RealEstateAsteriskService(models.AbstractModel):
         host = self._get_param("real_estate_asterisk.ami_host")
         username = self._get_param("real_estate_asterisk.ami_username")
         secret = self._get_param("real_estate_asterisk.ami_secret")
-        context = self._get_param("real_estate_asterisk.outbound_context", "realestate-outbound")
+        dial_context = self._get_param("real_estate_asterisk.outbound_context", "realestate-outbound")
         endpoint_template = self._get_param("real_estate_asterisk.endpoint_template", "PJSIP/{extension}")
         port = self._get_int_param("real_estate_asterisk.ami_port", 5038)
         timeout = self._get_int_param("real_estate_asterisk.originate_timeout", 30)
@@ -130,7 +130,7 @@ class RealEstateAsteriskService(models.AbstractModel):
             ("Action", "Originate"),
             ("ActionID", action_id),
             ("Channel", channel),
-            ("Context", context),
+            ("Context", dial_context),
             ("Exten", customer_number),
             ("Priority", "1"),
             ("CallerID", caller_id),
