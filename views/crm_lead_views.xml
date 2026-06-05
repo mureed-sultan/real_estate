@@ -34,16 +34,20 @@
                     <field name="ai_lead_status" widget="badge" decoration-success="ai_lead_status == 'hot'" decoration-danger="ai_lead_status == 'not_interested'"/>
                     <field name="ai_reason" readonly="1"/>
                     <field name="ai_last_call_id" readonly="1"/>
-                    <field name="ai_transcript" readonly="1"/>
+                    <!-- <field name="ai_transcript" readonly="1"/> -->
                 </group>
 
-                <group name="manual_audio_upload" string="Manual MP3 Upload">
+                <group name="manual_audio_upload" string="Manual MP3 Upload For testing only">
     <field name="manual_audio_attachment_id" 
            options="{'accepted_mimetypes': ['audio/mpeg','audio/wav']}"/>
     <button name="action_process_manual_audio" 
             type="object" 
             string="Process Audio" 
             class="btn-primary"/>
+    <!-- <button name="action_open_call_detail" 
+            type="object" 
+            string="View Recording Evaluation" 
+            class="btn-primary"/> -->
 </group>
             </xpath>
             <xpath expr="//notebook/page[@name='internal_notes']" position="after">
@@ -58,6 +62,9 @@
                             <field name="agent_id" widget="many2one_avatar_user"/>
                             <field name="customer_number"/>
                             <field name="duration"/>
+                              <field name="ai_lead_status" widget="badge" optional="show" />
+                <field name="ai_reason" optional="show" />
+                <field name="transcript_text" string="AI Transcript" optional="hide" />
                             <field name="duration_display" optional="hide"/>
                             <field name="status" widget="badge"/>
                             <button name="action_play_recording" type="object" icon="fa-play" string="Play" invisible="not recording_exists"/>

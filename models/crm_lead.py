@@ -45,6 +45,7 @@ class CrmLead(models.Model):
     ai_reason = fields.Text(string="AI Reason", tracking=True)
     ai_transcript = fields.Text(string="AI Transcript", tracking=True)
     ai_last_call_id = fields.Many2one("realestate.call", string="Last AI Call", readonly=True)
+    twilio_phone_number = fields.Char(string="Twilio Phone Number")
 
     # ========== NEW: Manual MP3 upload field ==========
     manual_audio_attachment_id = fields.Many2one(
@@ -259,4 +260,27 @@ class CrmLead(models.Model):
                 "sticky": False,
                 "type": "success",
             },
+        }
+
+    def action_open_call_detail(self):
+        """Open a small popup listing all manually uploaded audio files."""
+        self.ensure_one()
+        list_view = self.env.ref('real_estate.view_realestate_call_list')
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Uploaded Audio Files'),
+            'res_model': 'realestate.call',
+            'views': [(list_view.id, 'list')],  
+            'target': 'new',                     
+            'domain': [
+                ('lead_id', '=', self.id),
+                ('voip_provider', '=', 'manual'),
+                ('recording_attachment_id', '!=', False),
+            ],
+            'context': {
+                'default_lead_id': self.id,
+                'default_voip_provider': 'manual',
+            },
+            'height': 500,
+            'width': 800,
         }

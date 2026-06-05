@@ -4,19 +4,20 @@
         <field name="name">realestate.call.list</field>
         <field name="model">realestate.call</field>
         <field name="arch" type="xml">
-            <list string="Call History" decoration-danger="status in ('missed', 'failed')" decoration-success="status in ('answered', 'completed')">
-                <field name="recording_exists" column_invisible="True"/>
-                <field name="start_time"/>
-                <field name="lead_id"/>
-                <field name="customer_name"/>
-                <field name="customer_number"/>
-                <field name="agent_id" widget="many2one_avatar_user"/>
-                <field name="duration" sum="Total Duration"/>
-                <field name="duration_display" optional="hide"/>
-                <field name="status" widget="badge"/>
-                <field name="recording_format" optional="hide"/>
-                <button name="action_play_recording" type="object" icon="fa-play" string="Play" invisible="not recording_exists"/>
-                <button name="action_download_recording" type="object" icon="fa-download" string="Download" invisible="not recording_exists"/>
+            <list string="Call History" decoration-danger="status in ('missed', 'failed')"
+                decoration-success="status in ('answered', 'completed')">
+                <field name="recording_exists" column_invisible="True" />
+                <field name="start_time" />
+                <field name="customer_name" />
+                <field name="customer_number" />
+                <field name="agent_id" widget="many2one_avatar_user" />
+                <field name="status" widget="badge" />
+                <field name="create_date" string="Uploaded On" optional="show" />
+                <field name="create_uid" string="Created By" optional="show" />
+                <button name="action_play_recording" type="object" icon="fa-play" string="Play"
+                    invisible="not recording_exists" />
+                <button name="action_download_recording" type="object" icon="fa-download"
+                    string="Download" invisible="not recording_exists" />
             </list>
         </field>
     </record>
@@ -27,67 +28,86 @@
         <field name="arch" type="xml">
             <form string="Call">
                 <header>
-                    <button name="action_open_phone_interface" type="object" string="Open Phone Call" class="oe_highlight" icon="fa-phone" groups="real_estate.group_realestate_manager" invisible="status == 'completed'"/>
-                    <button name="action_twilio_make_call" type="object" string="Make Twilio Call" class="oe_highlight" icon="fa-phone" groups="real_estate.group_realestate_manager"/>
-                    <button name="action_twilio_end_call" type="object" string="End Twilio Call" class="btn-danger" icon="fa-phone-slash" groups="real_estate.group_realestate_manager" invisible="not twilio_call_sid"/>
-                    <button name="action_play_recording" type="object" string="Play Recording" class="oe_highlight" icon="fa-play" invisible="not recording_exists"/>
-                    <button name="action_download_recording" type="object" string="Download Recording" icon="fa-download" invisible="not recording_exists"/>
-                    <button name="action_transcribe_recording" type="object" string="Transcribe Call" class="btn-secondary" icon="fa-file-text-o" invisible="not recording_exists"/>
-                    <button name="action_analyze_transcript" type="object" string="AI Analyze" class="btn-secondary" icon="fa-magic" invisible="not transcript_text"/>
-                    <field name="status" widget="statusbar" statusbar_visible="queued,ringing,answered,completed,missed,failed"/>
+                    <button name="action_open_phone_interface" type="object"
+                        string="Open Phone Call" class="oe_highlight" icon="fa-phone"
+                        groups="real_estate.group_realestate_manager"
+                        invisible="status == 'completed'" />
+                    <button name="action_twilio_make_call" type="object" string="Make Twilio Call"
+                        class="oe_highlight" icon="fa-phone"
+                        groups="real_estate.group_realestate_manager" />
+                    <button name="action_twilio_end_call" type="object" string="End Twilio Call"
+                        class="btn-danger" icon="fa-phone-slash"
+                        groups="real_estate.group_realestate_manager"
+                        invisible="not twilio_call_sid" />
+                    <button name="action_play_recording" type="object" string="Play Recording"
+                        class="oe_highlight" icon="fa-play" invisible="not recording_exists" />
+                    <button name="action_download_recording" type="object"
+                        string="Download Recording" icon="fa-download"
+                        invisible="not recording_exists" />
+                    <button name="action_transcribe_recording" type="object"
+                        string="Transcribe Call" class="btn-secondary" icon="fa-file-text-o"
+                        invisible="not recording_exists" />
+                    <button name="action_analyze_transcript" type="object" string="AI Analyze"
+                        class="btn-secondary" icon="fa-magic" invisible="not transcript_text" />
+                    <field name="status" widget="statusbar"
+                        statusbar_visible="queued,ringing,answered,completed,missed,failed" />
                 </header>
                 <sheet>
                     <div class="oe_title">
                         <h1>
-                            <field name="customer_name"/>
+                            <field name="customer_name" />
                         </h1>
                     </div>
                     <group>
                         <group>
-                            <field name="lead_id"/>
-                            <field name="customer_number"/>
-                            <field name="agent_id" widget="many2one_avatar_user"/>
-                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="lead_id" />
+                            <field name="customer_number" />
+                            <field name="agent_id" widget="many2one_avatar_user" />
+                            <field name="company_id" groups="base.group_multi_company" />
                         </group>
                         <group>
-                            <field name="start_time"/>
-                            <field name="end_time"/>
-                            <field name="duration"/>
-                            <field name="duration_display" readonly="1"/>
+                            <field name="start_time" />
+                            <field name="end_time" />
+                            <field name="duration" />
+                            <field name="duration_display" readonly="1" />
                         </group>
                     </group>
                     <group string="Asterisk">
-                        <field name="recording_exists" readonly="1"/>
-                        <field name="recording_format"/>
-                        <field name="recording_path"/>
-                        <field name="recording_attachment_id" readonly="1"/>
-                        <field name="ami_action_id" readonly="1"/>
-                        <field name="asterisk_unique_id"/>
+                        <field name="recording_exists" readonly="1" />
+                        <field name="recording_format" />
+                        <field name="recording_path" />
+                        <field name="recording_attachment_id" readonly="1" />
+                        <field name="ami_action_id" readonly="1" />
+                        <field name="asterisk_unique_id" />
                     </group>
                     <group string="VoIP Provider">
-                        <field name="voip_provider"/>
-                        <field name="twilio_call_sid" readonly="1" invisible="voip_provider != 'twilio'"/>
+                        <field name="voip_provider" />
+                        <field name="twilio_call_sid" readonly="1"
+                            invisible="voip_provider != 'twilio'" />
                     </group>
                     <notebook>
                         <page string="Transcription &amp; AI Analysis" name="transcription_ai">
                             <group>
                                 <group string="Speech-to-Text">
-                                    <field name="transcript_source"/>
-                                    <field name="transcript_text" placeholder="Call transcript will appear here..."/>
+                                    <field name="transcript_source" />
+                                    <field name="transcript_text"
+                                        placeholder="Call transcript will appear here..." />
                                 </group>
                                 <group string="AI Evaluation">
-                                    <field name="ai_lead_status" widget="badge" decoration-success="ai_lead_status == 'hot'" decoration-danger="ai_lead_status == 'not_interested'"/>
-                                    <field name="ai_reason"/>
-                                    <field name="ai_analyzed_at"/>
+                                    <field name="ai_lead_status" widget="badge"
+                                        decoration-success="ai_lead_status == 'hot'"
+                                        decoration-danger="ai_lead_status == 'not_interested'" />
+                                    <field name="ai_reason" />
+                                    <field name="ai_analyzed_at" />
                                 </group>
                             </group>
                             <group string="Raw AI Response" groups="base.group_no_one">
-                                <field name="ai_raw_response"/>
+                                <field name="ai_raw_response" />
                             </group>
                         </page>
                     </notebook>
                 </sheet>
-                <chatter/>
+                <chatter />
             </form>
         </field>
     </record>
@@ -97,21 +117,25 @@
         <field name="model">realestate.call</field>
         <field name="arch" type="xml">
             <search string="Search Calls">
-                <field name="customer_name"/>
-                <field name="customer_number"/>
-                <field name="lead_id"/>
-                <field name="agent_id"/>
-                <field name="status"/>
-                <filter string="Answered" name="answered" domain="[('status', 'in', ('answered', 'completed'))]"/>
-                <filter string="Missed" name="missed" domain="[('status', '=', 'missed')]"/>
-                <filter string="Failed" name="failed" domain="[('status', '=', 'failed')]"/>
-                <filter string="With Recording" name="with_recording" domain="[('recording_path', '!=', False)]"/>
-                <filter string="Today" name="today" domain="[('start_time', '&gt;=', context_today().strftime('%Y-%m-%d 00:00:00'))]"/>
+                <field name="customer_name" />
+                <field name="customer_number" />
+                <field name="lead_id" />
+                <field name="agent_id" />
+                <field name="status" />
+                <filter string="Answered" name="answered"
+                    domain="[('status', 'in', ('answered', 'completed'))]" />
+                <filter string="Missed" name="missed" domain="[('status', '=', 'missed')]" />
+                <filter string="Failed" name="failed" domain="[('status', '=', 'failed')]" />
+                <filter string="With Recording" name="with_recording"
+                    domain="[('recording_path', '!=', False)]" />
+                <filter string="Today" name="today"
+                    domain="[('start_time', '&gt;=', context_today().strftime('%Y-%m-%d 00:00:00'))]" />
                 <group>
-                    <filter string="Agent" name="group_agent" context="{'group_by': 'agent_id'}"/>
-                    <filter string="Customer" name="group_customer" context="{'group_by': 'customer_name'}"/>
-                    <filter string="Status" name="group_status" context="{'group_by': 'status'}"/>
-                    <filter string="Date" name="group_date" context="{'group_by': 'start_time:day'}"/>
+                    <filter string="Agent" name="group_agent" context="{'group_by': 'agent_id'}" />
+                    <filter string="Customer" name="group_customer"
+                        context="{'group_by': 'customer_name'}" />
+                    <filter string="Status" name="group_status" context="{'group_by': 'status'}" />
+                    <filter string="Date" name="group_date" context="{'group_by': 'start_time:day'}" />
                 </group>
             </search>
         </field>
@@ -122,9 +146,9 @@
         <field name="model">realestate.call</field>
         <field name="arch" type="xml">
             <graph string="Call Statistics" type="bar">
-                <field name="agent_id"/>
-                <field name="status"/>
-                <field name="duration" type="measure"/>
+                <field name="agent_id" />
+                <field name="status" />
+                <field name="duration" type="measure" />
             </graph>
         </field>
     </record>
@@ -134,9 +158,9 @@
         <field name="model">realestate.call</field>
         <field name="arch" type="xml">
             <pivot string="Call Analysis">
-                <field name="agent_id" type="row"/>
-                <field name="status" type="col"/>
-                <field name="duration" type="measure"/>
+                <field name="agent_id" type="row" />
+                <field name="status" type="col" />
+                <field name="duration" type="measure" />
             </pivot>
         </field>
     </record>
@@ -145,7 +169,7 @@
         <field name="name">My Call History</field>
         <field name="res_model">realestate.call</field>
         <field name="view_mode">list,form,graph,pivot</field>
-        <field name="search_view_id" ref="view_realestate_call_search"/>
+        <field name="search_view_id" ref="view_realestate_call_search" />
         <field name="domain">[('agent_id', '=', uid)]</field>
         <field name="context">{'default_agent_id': uid}</field>
     </record>
@@ -154,14 +178,14 @@
         <field name="name">All Calls</field>
         <field name="res_model">realestate.call</field>
         <field name="view_mode">list,form,graph,pivot</field>
-        <field name="search_view_id" ref="view_realestate_call_search"/>
+        <field name="search_view_id" ref="view_realestate_call_search" />
     </record>
 
     <record id="action_realestate_admin_call_dashboard" model="ir.actions.act_window">
         <field name="name">Call Statistics</field>
         <field name="res_model">realestate.call</field>
         <field name="view_mode">graph,pivot,list,form</field>
-        <field name="search_view_id" ref="view_realestate_call_search"/>
+        <field name="search_view_id" ref="view_realestate_call_search" />
         <field name="context">{'search_default_group_agent': 1}</field>
     </record>
 </odoo>

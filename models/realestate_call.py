@@ -6,6 +6,7 @@ import urllib.error
 import urllib.request
 import wave
 from datetime import timedelta
+from functools import lru_cache
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
@@ -19,6 +20,7 @@ class RealEstateCall(models.Model):
     _inherit = ["mail.thread", "mail.activity.mixin"]
     _order = "start_time desc, id desc"
 
+    # ---------- Fields (unchanged) ----------
     lead_id = fields.Many2one("crm.lead", string="Lead", required=True, ondelete="cascade", index=True, tracking=True)
     customer_name = fields.Char(string="Customer Name", required=True, tracking=True)
     customer_number = fields.Char(string="Customer Number", required=True, tracking=True)
@@ -65,38 +67,7 @@ class RealEstateCall(models.Model):
     ], string="VoIP Provider", tracking=True)
     company_id = fields.Many2one("res.company", string="Company", related="lead_id.company_id", store=True, readonly=True)
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            if vals.get("lead_id"):
-                lead = self.env["crm.lead"].browse(vals["lead_id"])
-                vals.setdefault("customer_name", lead.realestate_customer_name or lead.contact_name or lead.partner_name or lead.name)
-                vals.setdefault("customer_number", lead.mobile_number or lead.phone)
-                vals.setdefault("agent_id", lead.user_id.id or self.env.uid)
-        return super().create(vals_list)
-
-    def write(self, vals):
-        # Track calls whose status is being modified
-        calls_to_finalize = self.env["realestate.call"]
-        if "status" in vals:
-            for call in self:
-                if call.status != vals["status"]:
-                    calls_to_finalize |= call
-
-        result = super().write(vals)
-        if {"start_time", "end_time"} & set(vals) and "duration" not in vals:
-            for call in self.filtered(lambda item: item.start_time and item.end_time):
-                duration = max(0, int((call.end_time - call.start_time).total_seconds()))
-                if call.duration != duration:
-                    super(RealEstateCall, call).write({"duration": duration})
-
-        # Run post-call processing for completed calls
-        if calls_to_finalize:
-            for call in calls_to_finalize:
-                call._post_call_processing()
-
-        return result
-
+    # ---------- Compute / helpers ----------
     def _format_seconds(self, seconds):
         seconds = int(seconds or 0)
         hours, remainder = divmod(seconds, 3600)
@@ -128,6 +99,7 @@ class RealEstateCall(models.Model):
                 mimetype, _encoding = mimetypes.guess_type(call.recording_path or "")
                 call.recording_mimetype = mimetype or "application/octet-stream"
 
+    # ---------- Recording handling (unchanged but keep) ----------
     def _ensure_recording_available(self):
         self.ensure_one()
         if self.recording_attachment_id:
@@ -154,6 +126,291 @@ class RealEstateCall(models.Model):
             "target": "self",
         }
 
+    # ---------- Whisper Model Caching ----------
+    @staticmethod
+    @lru_cache(maxsize=4)
+    def _get_whisper_model(model_name: str):
+        """Load and cache Whisper model by name."""
+        try:
+            import whisper
+            _logger.info("Loading Whisper model '%s'...", model_name)
+            return whisper.load_model(model_name)
+        except Exception as e:
+            _logger.exception("Failed to load Whisper model")
+            raise UserError(_(
+                "Whisper/PyTorch failed to load: %s\n\n"
+                "This is usually a system memory or library issue.\n"
+                "Try running: ulimit -v unlimited\n"
+                "Or switch to Google STT by setting system parameter:\n"
+                "real_estate_ai.stt_provider = google"
+            ) % str(e)) from e
+
+    # ---------- Transcription ----------
+    def _transcribe_google_stt(self, audio_data, file_ext):
+        api_key = self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.google_api_key")
+        if not api_key:
+            raise UserError(_("Google Cloud Speech API Key is not configured in settings."))
+
+        import base64
+        import json
+        import urllib.request
+        import urllib.error
+
+        audio_content = base64.b64encode(audio_data).decode("utf-8")
+        encoding = "MP3" if file_ext.lower() == "mp3" else "LINEAR16"
+
+        payload = {
+            "config": {
+                "encoding": encoding,
+                "sampleRateHertz": 16000,
+                "languageCode": "en-US",
+                "alternativeLanguageCodes": ["ur-PK"],
+            },
+            "audio": {
+                "content": audio_content
+            }
+        }
+
+        endpoint = "https://speech.googleapis.com/v1/speech:recognize?key=%s" % api_key
+        request_data = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        http_request = urllib.request.Request(endpoint, data=request_data, headers=headers, method="POST")
+
+        try:
+            with urllib.request.urlopen(http_request, timeout=60) as response:
+                response_data = json.loads(response.read().decode("utf-8"))
+
+            transcript_parts = []
+            results = response_data.get("results", [])
+            for result in results:
+                alternatives = result.get("alternatives", [])
+                if alternatives:
+                    transcript_parts.append(alternatives[0].get("transcript", ""))
+            return " ".join(transcript_parts).strip()
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            raise UserError(_("Google STT failed (%s): %s") % (error.code, body)) from error
+        except Exception as error:
+            raise UserError(_("Google STT failed: %s") % error) from error
+
+    def _get_audio_data_and_ext(self):
+        """Returns (audio_bytes, file_extension, temp_filepath, is_temp)."""
+        self.ensure_one()
+        if self.recording_attachment_id:
+            import base64
+            import tempfile
+            data = base64.b64decode(self.recording_attachment_id.datas or b"")
+            filename = self.recording_attachment_id.name or "recording.mp3"
+            ext = os.path.splitext(filename)[1].replace(".", "") or "mp3"
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix="." + ext)
+            temp_file.write(data)
+            temp_file.close()
+            return data, ext, temp_file.name, True
+
+        path = self._ensure_recording_available()
+        if path is True:
+            raise UserError(_("Recording path could not be resolved from attachment."))
+        ext = os.path.splitext(path)[1].replace(".", "") or "wav"
+        with open(path, "rb") as f:
+            data = f.read()
+        return data, ext, path, False
+
+    def _transcribe_recording_auto(self):
+        self.ensure_one()
+        provider = self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.stt_provider", "whisper")
+
+        if provider == "google":
+            # Keep existing Google STT logic
+            data, ext, path, is_temp = self._get_audio_data_and_ext()
+            try:
+                transcript = self._transcribe_google_stt(data, ext)
+            finally:
+                if is_temp and os.path.exists(path):
+                    try:
+                        os.unlink(path)
+                    except Exception:
+                        pass
+            self.write({
+                "transcript_text": transcript,
+                "transcript_source": "google",
+            })
+            return True
+
+        # ---------- Whisper (local) – use model.transcribe directly ----------
+        # Get audio file path (supports both attachment and disk file)
+        data, ext, path, is_temp = self._get_audio_data_and_ext()
+        transcript = ""
+
+        try:
+            import whisper
+            model_name = self.env["ir.config_parameter"].sudo().get_param(
+                "real_estate_ai.whisper_model", "base"
+            ) or "base"
+            _logger.info("Loading Whisper model '%s' for call %s", model_name, self.id)
+            model = whisper.load_model(model_name)
+
+            # Direct transcription – Whisper handles audio loading internally (uses ffmpeg)
+            _logger.info("Transcribing file: %s", path)
+            result = model.transcribe(path, fp16=False)
+            transcript = (result or {}).get("text", "").strip()
+            _logger.info("Transcription successful, length: %d chars", len(transcript))
+
+        except ImportError as e:
+            _logger.exception("Missing library for Whisper")
+            raise UserError(_(
+                "Whisper transcription requires 'openai-whisper' and 'torch'. "
+                "Run: pip install openai-whisper torch"
+            )) from e
+        except Exception as e:
+            _logger.exception("Whisper transcription failed for call %s", self.id)
+            raise UserError(_("Whisper transcription failed: %s") % str(e)) from e
+        finally:
+            # Clean up temporary file if created from attachment
+            if is_temp and os.path.exists(path):
+                try:
+                    os.unlink(path)
+                except Exception as cleanup_err:
+                    _logger.warning("Failed to delete temp file %s: %s", path, cleanup_err)
+
+        self.write({
+            "transcript_text": transcript,
+            "transcript_source": "whisper",
+        })
+        return True
+
+    def action_transcribe_recording(self):
+        self.ensure_one()
+        self._transcribe_recording_auto()
+        return True
+
+    # ---------- AI Analysis (Gemini) with improved prompt ----------
+    def _gemini_api_key(self):
+        return self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.gemini_api_key")
+
+    def _gemini_model(self):
+        return self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.gemini_model", "gemini-2.5-flash") or "gemini-2.5-flash"
+
+    def _prepare_ai_prompt(self):
+        """Build a prompt that forces JSON response and accepts Roman Urdu."""
+        self.ensure_one()
+        transcript = (self.transcript_text or "").strip()
+        if not transcript:
+            raise UserError(_("Transcript is empty. Please transcribe or enter text first."))
+
+        return f"""
+Analyze this real estate sales call transcript and classify the lead.
+Respond ONLY with a valid JSON object. Do not include any other text or explanation outside the JSON.
+The JSON must follow this exact structure:
+{{
+    "status": "hot" or "not_interested",
+    "reason": "a short one-sentence explanation in English, Arabic, or Roman Urdu"
+}}
+
+Transcript:
+{transcript}
+"""
+
+    def action_analyze_transcript(self):
+        for call in self:
+            call._analyze_transcript()
+        return True
+
+    def _analyze_transcript(self):
+        self.ensure_one()
+        if not self.transcript_text:
+            raise UserError(_("Add or generate a transcript before running AI analysis."))
+
+        api_key = self._gemini_api_key()
+        if not api_key:
+            raise UserError(_("Configure the Gemini API key in CRM Settings (real_estate_ai.gemini_api_key)."))
+
+        model = self._gemini_model()
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+        payload = {
+            "contents": [{"parts": [{"text": self._prepare_ai_prompt()}]}],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "temperature": 0.2,
+            },
+        }
+
+        request_data = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        http_request = urllib.request.Request(endpoint, data=request_data, headers=headers, method="POST")
+
+        try:
+            with urllib.request.urlopen(http_request, timeout=45) as response:
+                response_data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            raise UserError(_("Gemini analysis failed (%s): %s") % (error.code, body)) from error
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
+            raise UserError(_("Gemini analysis failed: %s") % error) from error
+
+        # Extract JSON from response
+        try:
+            raw_text = response_data["candidates"][0]["content"]["parts"][0]["text"]
+            # In case Gemini adds markdown code fences, strip them
+            raw_text = raw_text.strip()
+            if raw_text.startswith("```json"):
+                raw_text = raw_text[7:]
+            if raw_text.startswith("```"):
+                raw_text = raw_text[3:]
+            if raw_text.endswith("```"):
+                raw_text = raw_text[:-3]
+            result = json.loads(raw_text.strip())
+        except (KeyError, IndexError, json.JSONDecodeError, TypeError) as error:
+            raise UserError(_("Gemini returned an unexpected response: %s") % response_data) from error
+
+        status = result.get("status")
+        if status not in ("hot", "not_interested"):
+            status = "unknown"
+
+        values = {
+            "ai_lead_status": status,
+            "ai_reason": result.get("reason"),
+            "ai_analyzed_at": fields.Datetime.now(),
+            "ai_raw_response": json.dumps(response_data, indent=2),
+        }
+        self.write(values)
+
+        if self.lead_id:
+            self.lead_id.write({
+                "ai_lead_status": status,
+                "ai_reason": result.get("reason"),
+                "ai_transcript": self.transcript_text,
+                "ai_last_call_id": self.id,
+            })
+        return result
+
+    # ---------- Post-call automation ----------
+    def _post_call_processing(self):
+        self.ensure_one()
+        if self.status == "completed" and self.recording_path:
+            try:
+                self._save_recording_as_attachment()
+            except Exception as e:
+                _logger.exception("Failed to save call recording as attachment for call %s", self.id)
+                self.message_post(body=_("Failed to save/convert recording to attachment: %s") % str(e))
+
+        if self.status == "completed":
+            self._run_automated_transcription_and_analysis()
+
+    def _run_automated_transcription_and_analysis(self):
+        """Runs the automated transcription and analysis pipeline without raising blocker exceptions."""
+        self.ensure_one()
+        try:
+            self._transcribe_recording_auto()
+            if self.transcript_text:
+                self._analyze_transcript()
+            else:
+                self.message_post(body=_("Automated analysis skipped: Transcript is empty."))
+        except Exception as e:
+            _logger.exception("Failed automated call transcription/analysis for call %s", self.id)
+            self.message_post(body=_("Automated Call Processing failed: %s") % str(e))
+
+    # ---------- Rest of the methods (unchanged) ----------
     def _convert_wav_to_mp3(self, wav_path):
         """Converts a WAV file to MP3. Returns the path to the MP3 file or False if conversion failed."""
         if not wav_path or not os.path.exists(wav_path):
@@ -244,243 +501,6 @@ class RealEstateCall(models.Model):
                 attachment_ids=[attachment.id]
             )
         return attachment
-
-    def _get_audio_data_and_ext(self):
-        """Returns (audio_bytes, file_extension, temp_filepath, is_temp).
-        temp_filepath should be cleaned up by the caller if is_temp is True.
-        """
-        self.ensure_one()
-        if self.recording_attachment_id:
-            import base64
-            import tempfile
-            data = base64.b64decode(self.recording_attachment_id.datas or b"")
-            filename = self.recording_attachment_id.name or "recording.mp3"
-            ext = os.path.splitext(filename)[1].replace(".", "") or "mp3"
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix="." + ext)
-            temp_file.write(data)
-            temp_file.close()
-            return data, ext, temp_file.name, True
-
-        path = self._ensure_recording_available()
-        # If it returned True because attachment exists but path is missing, handle gracefully
-        if path is True:
-            raise UserError(_("Recording path could not be resolved from attachment."))
-        ext = os.path.splitext(path)[1].replace(".", "") or "wav"
-        with open(path, "rb") as f:
-            data = f.read()
-        return data, ext, path, False
-
-    def _transcribe_google_stt(self, audio_data, file_ext):
-        api_key = self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.google_api_key")
-        if not api_key:
-            raise UserError(_("Google Cloud Speech API Key is not configured in settings."))
-
-        import base64
-        import json
-        import urllib.request
-        import urllib.error
-
-        audio_content = base64.b64encode(audio_data).decode("utf-8")
-        encoding = "MP3" if file_ext.lower() == "mp3" else "LINEAR16"
-
-        payload = {
-            "config": {
-                "encoding": encoding,
-                "sampleRateHertz": 16000,
-                "languageCode": "en-US",
-                "alternativeLanguageCodes": ["ur-PK"],
-            },
-            "audio": {
-                "content": audio_content
-            }
-        }
-
-        endpoint = "https://speech.googleapis.com/v1/speech:recognize?key=%s" % api_key
-        request_data = json.dumps(payload).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
-        http_request = urllib.request.Request(endpoint, data=request_data, headers=headers, method="POST")
-
-        try:
-            with urllib.request.urlopen(http_request, timeout=60) as response:
-                response_data = json.loads(response.read().decode("utf-8"))
-
-            transcript_parts = []
-            results = response_data.get("results", [])
-            for result in results:
-                alternatives = result.get("alternatives", [])
-                if alternatives:
-                    transcript_parts.append(alternatives[0].get("transcript", ""))
-            return " ".join(transcript_parts).strip()
-        except urllib.error.HTTPError as error:
-            body = error.read().decode("utf-8", errors="replace")
-            raise UserError(_("Google STT failed (%s): %s") % (error.code, body)) from error
-        except Exception as error:
-            raise UserError(_("Google STT failed: %s") % error) from error
-
-    def _transcribe_recording_auto(self):
-        self.ensure_one()
-        provider = self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.stt_provider", "whisper")
-
-        if provider == "google":
-            data, ext, path, is_temp = self._get_audio_data_and_ext()
-            try:
-                transcript = self._transcribe_google_stt(data, ext)
-            finally:
-                if is_temp and os.path.exists(path):
-                    try:
-                        os.unlink(path)
-                    except Exception:
-                        pass
-            self.write({
-                "transcript_text": transcript,
-                "transcript_source": "google",
-            })
-            return True
-        else:
-            # Whisper local
-            data, ext, path, is_temp = self._get_audio_data_and_ext()
-            try:
-                import librosa
-                import whisper
-            except ImportError as error:
-                if is_temp and os.path.exists(path):
-                    try:
-                        os.unlink(path)
-                    except Exception:
-                        pass
-                raise UserError(_("Install optional Python packages openai-whisper and librosa on the Odoo server to use local transcription.")) from error
-
-            model_name = self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.whisper_model", "base") or "base"
-            try:
-                model = whisper.load_model(model_name)
-                audio_array, _sample_rate = librosa.load(path, sr=16000)
-                result = model.transcribe(audio_array, fp16=False)
-                transcript = (result or {}).get("text", "").strip()
-            except Exception as error:
-                raise UserError(_("Whisper transcription failed: %s") % error) from error
-            finally:
-                if is_temp and os.path.exists(path):
-                    try:
-                        os.unlink(path)
-                    except Exception:
-                        pass
-
-            self.write({
-                "transcript_text": transcript,
-                "transcript_source": "whisper",
-            })
-            return True
-
-    def action_transcribe_recording(self):
-        self.ensure_one()
-        self._transcribe_recording_auto()
-        return True
-
-    def _gemini_api_key(self):
-        return self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.gemini_api_key")
-
-    def _gemini_model(self):
-        return self.env["ir.config_parameter"].sudo().get_param("real_estate_ai.gemini_model", "gemini-2.5-flash") or "gemini-2.5-flash"
-
-    def _prepare_ai_prompt(self):
-        self.ensure_one()
-        return """
-Analyze this real estate sales call transcript and classify the lead.
-Respond ONLY with a valid JSON object matching this structure:
-{
-    "status": "hot" or "not_interested",
-    "reason": "a short one-sentence explanation in Arabic or English"
-}
-
-Transcript:
-%s
-""" % (self.transcript_text or "")
-
-    def action_analyze_transcript(self):
-        for call in self:
-            call._analyze_transcript()
-        return True
-
-    def _analyze_transcript(self):
-        self.ensure_one()
-        if not self.transcript_text:
-            raise UserError(_("Add or generate a transcript before running AI analysis."))
-        api_key = self._gemini_api_key()
-        if not api_key:
-            raise UserError(_("Configure the Gemini API key in CRM Settings before running AI analysis."))
-
-        model = self._gemini_model()
-        endpoint = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s" % (model, api_key)
-        payload = {
-            "contents": [{"parts": [{"text": self._prepare_ai_prompt()}]}],
-            "generationConfig": {"responseMimeType": "application/json"},
-        }
-        request_data = json.dumps(payload).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
-        http_request = urllib.request.Request(endpoint, data=request_data, headers=headers, method="POST")
-
-        try:
-            with urllib.request.urlopen(http_request, timeout=45) as response:
-                response_data = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as error:
-            body = error.read().decode("utf-8", errors="replace")
-            raise UserError(_("Gemini analysis failed (%s): %s") % (error.code, body)) from error
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
-            raise UserError(_("Gemini analysis failed: %s") % error) from error
-
-        try:
-            raw_text = response_data["candidates"][0]["content"]["parts"][0]["text"]
-            result = json.loads(raw_text)
-        except (KeyError, IndexError, json.JSONDecodeError, TypeError) as error:
-            raise UserError(_("Gemini returned an unexpected response: %s") % response_data) from error
-
-        status = result.get("status")
-        if status not in ("hot", "not_interested"):
-            status = "unknown"
-        values = {
-            "ai_lead_status": status,
-            "ai_reason": result.get("reason"),
-            "ai_analyzed_at": fields.Datetime.now(),
-            "ai_raw_response": json.dumps(response_data, indent=2),
-        }
-        self.write(values)
-        if self.lead_id:
-            self.lead_id.write({
-                "ai_lead_status": status,
-                "ai_reason": result.get("reason"),
-                "ai_transcript": self.transcript_text,
-                "ai_last_call_id": self.id,
-            })
-        return result
-
-    def _run_automated_transcription_and_analysis(self):
-        """Runs the automated transcription and analysis pipeline without raising blocker exceptions."""
-        self.ensure_one()
-        try:
-            # 1. Transcribe
-            self._transcribe_recording_auto()
-            # 2. Analyze
-            if self.transcript_text:
-                self._analyze_transcript()
-            else:
-                self.message_post(body=_("Automated analysis skipped: Transcript is empty."))
-        except Exception as e:
-            _logger.exception("Failed automated call transcription/analysis for call %s", self.id)
-            self.message_post(body=_("Automated Call Processing failed: %s") % str(e))
-
-    def _post_call_processing(self):
-        self.ensure_one()
-        # 1. Save recording as attachment (which will convert WAV to MP3 if needed)
-        if self.status == "completed" and self.recording_path:
-            try:
-                self._save_recording_as_attachment()
-            except Exception as e:
-                _logger.exception("Failed to save call recording as attachment for call %s", self.id)
-                self.message_post(body=_("Failed to save/convert recording to attachment: %s") % str(e))
-
-        # 2. Trigger transcription and AI analysis automatically
-        if self.status == "completed":
-            self._run_automated_transcription_and_analysis()
 
     def _wav_duration(self, path):
         try:
@@ -593,17 +613,13 @@ Transcript:
     def action_open_phone_interface(self):
         """Open in-browser Twilio phone interface"""
         self.ensure_one()
-        
         twilio_enabled = self.env["ir.config_parameter"].sudo().get_param("real_estate_twilio.enabled")
         if not twilio_enabled:
             raise UserError(_("Twilio VoIP is not enabled. Please enable it in settings."))
-        
         if not self.agent_id.twilio_phone_number:
             raise UserError(
                 _("The assigned agent must have a Twilio phone number configured in their profile.")
             )
-        
-        # Open phone interface in new window
         return {
             "type": "ir.actions.act_url",
             "url": f"/twilio/call/{self.id}/phone-view",
@@ -611,17 +627,13 @@ Transcript:
         }
 
     def action_twilio_make_call(self):
-        """Action button to make a call via Twilio"""
         self.ensure_one()
-        
         twilio_enabled = self.env["ir.config_parameter"].sudo().get_param("real_estate_twilio.enabled")
         if not twilio_enabled:
             raise UserError(_("Twilio VoIP is not enabled. Please enable it in settings."))
-        
         service = self.env["realestate.twilio.service"]
         self.voip_provider = "twilio"
         service.make_call(self)
-        
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
@@ -633,15 +645,11 @@ Transcript:
         }
 
     def action_twilio_end_call(self):
-        """Action button to end an active Twilio call"""
         self.ensure_one()
-        
         if not self.twilio_call_sid:
             raise UserError(_("This call does not have a Twilio Call SID."))
-        
         service = self.env["realestate.twilio.service"]
         service.end_call(self)
-        
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",

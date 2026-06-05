@@ -9,3 +9,4 @@ access_agent_commission_agent,agent.commission.agent,model_agent_commission,real
 access_agent_commission_manager,agent.commission.manager,model_agent_commission,real_estate.group_realestate_manager,1,1,1,1
 access_agent_performance_agent,realestate.agent.performance.agent,model_realestate_agent_performance,real_estate.group_realestate_agent,1,0,0,0
 access_agent_performance_manager,realestate.agent.performance.manager,model_realestate_agent_performance,real_estate.group_realestate_manager,1,0,0,0
+access_lead_audio_analysis_user,lead.audio.analysis.user,model_lead_audio_analysis,base.group_user,1,1,1,1
