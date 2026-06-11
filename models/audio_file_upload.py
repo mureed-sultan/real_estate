@@ -18,6 +18,11 @@ class CrmLead(models.Model):
 
     def action_transcribe_audio(self):
         self.ensure_one()
+        import whisper
+        import librosa
+        import base64
+        import tempfile
+        import os
         if not self.audio_file:
             raise UserError("Meharbani karke pehle audio file upload karein!")
 

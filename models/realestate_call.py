@@ -55,6 +55,8 @@ class RealEstateCall(models.Model):
         ("unknown", "Unknown"),
     ], string="AI Lead Status", default="unknown", tracking=True)
     ai_reason = fields.Text(string="AI Reason", tracking=True)
+    ai_agent_evaluation = fields.Text(string="AI Agent Evaluation", tracking=True)
+    ai_agent_rating = fields.Text(string="AI Agent Rating", tracking=True)
     ai_analyzed_at = fields.Datetime(string="AI Analyzed At", readonly=True)
     ai_raw_response = fields.Text(string="AI Raw Response", readonly=True)
     ami_action_id = fields.Char(string="AMI Action ID", index=True, copy=False)
@@ -304,6 +306,12 @@ The JSON must follow this exact structure:
 {{
     "status": "hot" or "not_interested",
     "reason": "a short one-sentence explanation in English, Arabic, or Roman Urdu"
+    "agent_evaluation": "# 1. EVALUATION CRITERIA
+*   **Introduction & Tone:** Did the agent state their name/agency clearly? Was the greeting professional, warm, and confident?
+*   **Discovery & Need Analysis:** Did the agent ask open-ended questions to discover the lead's core needs (budget, timeline, location, motivation to buy/sell)?
+*   **Objection Handling:** How effectively did the agent address hesitations, concerns, or pushback (e.g., commission fees, market conditions, or timing)?
+*   **Value Proposition:** Did the agent clearly explain how they or their agency can help the client solve their problem?"
+     "agent_rating": "Rate each category on a scale of 1 to 5 in the format: 'Introduction: X/5, Discovery: Y/5, Objection Handling: Z/5, Value Proposition: W/5' or similar."
 }}
 
 Transcript:
@@ -348,10 +356,9 @@ Transcript:
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
             raise UserError(_("Gemini analysis failed: %s") % error) from error
 
-        # Extract JSON from response
+        # Extract JSON from response (strip markdown if present)
         try:
             raw_text = response_data["candidates"][0]["content"]["parts"][0]["text"]
-            # In case Gemini adds markdown code fences, strip them
             raw_text = raw_text.strip()
             if raw_text.startswith("```json"):
                 raw_text = raw_text[7:]
@@ -363,25 +370,37 @@ Transcript:
         except (KeyError, IndexError, json.JSONDecodeError, TypeError) as error:
             raise UserError(_("Gemini returned an unexpected response: %s") % response_data) from error
 
+        # Map status
         status = result.get("status")
         if status not in ("hot", "not_interested"):
             status = "unknown"
 
+        # Prepare values for the call record
         values = {
             "ai_lead_status": status,
             "ai_reason": result.get("reason"),
             "ai_analyzed_at": fields.Datetime.now(),
             "ai_raw_response": json.dumps(response_data, indent=2),
+            "ai_agent_evaluation": result.get("agent_evaluation"),   # correct spelling
+            "ai_agent_rating": result.get("agent_rating") or result.get("agent-rating"),
         }
         self.write(values)
 
+        # Update linked lead if available
         if self.lead_id:
-            self.lead_id.write({
+            lead_vals = {
                 "ai_lead_status": status,
                 "ai_reason": result.get("reason"),
                 "ai_transcript": self.transcript_text,
                 "ai_last_call_id": self.id,
-            })
+            }
+            # If lead has evaluation/rating fields, add them (optional)
+            if hasattr(self.lead_id, "ai_agent_evaluation"):
+                lead_vals["ai_agent_evaluation"] = values["ai_agent_evaluation"]
+            if hasattr(self.lead_id, "ai_agent_rating"):
+                lead_vals["ai_agent_rating"] = values["ai_agent_rating"]
+            self.lead_id.write(lead_vals)
+
         return result
 
     # ---------- Post-call automation ----------

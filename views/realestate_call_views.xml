@@ -4,16 +4,28 @@
         <field name="name">realestate.call.list</field>
         <field name="model">realestate.call</field>
         <field name="arch" type="xml">
-            <list string="Call History" decoration-danger="status in ('missed', 'failed')"
+            <list string="Call History" multi_edit="1"
+                decoration-danger="status in ('missed', 'failed')"
                 decoration-success="status in ('answered', 'completed')">
-                <field name="recording_exists" column_invisible="True" />
+                <!-- Basic customer info -->
                 <field name="start_time" />
                 <field name="customer_name" />
                 <field name="customer_number" />
-                <field name="agent_id" widget="many2one_avatar_user" />
+                <field name="agent_id" widget="many2one_avatar_user" optional="show" />
                 <field name="status" widget="badge" />
+                <!-- Recording -->
+                <field name="recording_exists" widget="boolean" string="Recording" optional="show" />
+                <!-- AI Analysis -->
+                <field name="ai_lead_status" string="AI Status" optional="show" widget="badge"
+                    decoration-success="ai_lead_status=='hot'"
+                    decoration-danger="ai_lead_status=='not_interested'" />
+                <field name="ai_reason" optional="hide" />
+                <field name="ai_agent_rating" optional="hide" />
+                <field name="ai_agent_evaluation" optional="hide" />
+                <!-- Additional meta -->
                 <field name="create_date" string="Uploaded On" optional="show" />
                 <field name="create_uid" string="Created By" optional="show" />
+                <!-- Action buttons -->
                 <button name="action_play_recording" type="object" icon="fa-play" string="Play"
                     invisible="not recording_exists" />
                 <button name="action_download_recording" type="object" icon="fa-download"
@@ -98,6 +110,10 @@
                                         decoration-success="ai_lead_status == 'hot'"
                                         decoration-danger="ai_lead_status == 'not_interested'" />
                                     <field name="ai_reason" />
+                                    <field name="ai_agent_rating"
+                                        placeholder="e.g. Introduction: 4/5, Discovery: 5/5..." />
+                                    <field name="ai_agent_evaluation" nolabel="1"
+                                        placeholder="Detailed evaluation by AI..." />
                                     <field name="ai_analyzed_at" />
                                 </group>
                             </group>

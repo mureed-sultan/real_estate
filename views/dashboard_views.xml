@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- DASHBOARD SEARCH VIEW -->
+    <record id="dashboard_lead_search" model="ir.ui.view">
+        <field name="name">dashboard.lead.search</field>
+        <field name="model">crm.lead</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="user_id"/>
+                <field name="property_type"/>
+                <field name="property_location"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- DASHBOARD KANBAN VIEW -->
+    <record id="dashboard_lead_kanban" model="ir.ui.view">
+        <field name="name">dashboard.lead.kanban</field>
+        <field name="model">crm.lead</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile">
+                <field name="realestate_customer_name"/>
+                <field name="property_type"/>
+                <field name="property_location"/>
+                <field name="budget"/>
+                <field name="ai_lead_status"/>
+                <field name="realestate_call_count"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div class="oe_kanban_global_click">
+                            <div class="o_kanban_image">
+                                <img t-att-src="kanban_image('res.partner', 'image_128', record.partner_id.raw_value)" alt="Partner" class="o_image_64_cover"/>
+                            </div>
+                            <div class="oe_kanban_details">
+                                <strong class="o_kanban_record_title">
+                                    <field name="realestate_customer_name"/>
+                                </strong>
+                                <div class="text-muted o_kanban_record_subtitle">
+                                    <field name="property_type"/> – <field name="property_location"/>
+                                </div>
+                                <div> Budget: <field name="budget" widget="monetary"/> </div>
+                                <div> Calls: <field name="realestate_call_count"/>
+                                    <t t-if="record.ai_lead_status.value == 'hot'">
+                                        <span class="badge bg-success">Hot</span>
+                                    </t>
+                                    <t t-if="record.ai_lead_status.value == 'not_interested'">
+                                        <span class="badge bg-danger">Not Interested</span>
+                                    </t>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- DASHBOARD LIST VIEW -->
+    <record id="dashboard_lead_tree" model="ir.ui.view">
+        <field name="name">dashboard.lead.list</field>
+        <field name="model">crm.lead</field>
+        <field name="arch" type="xml">
+            <list string="Lead Dashboard">
+                <field name="realestate_customer_name"/>
+                <field name="user_id"/>
+                <field name="property_type"/>
+                <field name="property_location"/>
+                <field name="budget"/>
+                <field name="realestate_call_count"/>
+                <field name="ai_lead_status"/>
+                <field name="create_date"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- DASHBOARD GRAPH VIEW -->
+    <record id="dashboard_lead_graph" model="ir.ui.view">
+        <field name="name">dashboard.lead.graph</field>
+        <field name="model">crm.lead</field>
+        <field name="arch" type="xml">
+            <graph string="Lead Analytics" type="bar">
+                <field name="user_id" type="row"/>
+                <field name="id" type="measure" string="Total Leads"/>
+                <field name="budget" type="measure" operator="sum"/>
+                <field name="realestate_call_count" type="measure" operator="sum"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- DASHBOARD PIVOT VIEW -->
+    <record id="dashboard_lead_pivot" model="ir.ui.view">
+        <field name="name">dashboard.lead.pivot</field>
+        <field name="model">crm.lead</field>
+        <field name="arch" type="xml">
+            <pivot string="Lead Performance">
+                <field name="user_id" type="row"/>
+                <field name="create_date" interval="month" type="col"/>
+                <field name="id" type="measure" string="Leads"/>
+                <field name="budget" type="measure" operator="sum"/>
+                <field name="realestate_call_count" type="measure" operator="sum"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!-- DASHBOARD ACTION (the main entry point) -->
+    <record id="action_realestate_dashboard" model="ir.actions.act_window">
+        <field name="name">Real Estate Dashboard</field>
+        <field name="res_model">crm.lead</field>
+        <field name="view_mode">graph,pivot,list,kanban,form</field>
+        <field name="search_view_id" ref="dashboard_lead_search"/>
+    </record>
+
+    <!-- Additional graphs for calls & agent performance (optional) -->
+    <record id="dashboard_call_graph" model="ir.ui.view">
+        <field name="name">dashboard.call.graph</field>
+        <field name="model">realestate.call</field>
+        <field name="arch" type="xml">
+            <graph string="Call Statistics" type="bar">
+                <field name="status" type="row"/>
+                <field name="duration" type="measure" operator="sum"/>
+                <field name="start_time" type="col" interval="day"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="dashboard_agent_performance_tree" model="ir.ui.view">
+        <field name="name">dashboard.agent.performance.list</field>
+        <field name="model">realestate.agent.performance</field>
+        <field name="arch" type="xml">
+            <list string="Agent Performance" default_order="total_calls desc">
+                <field name="agent_id"/>
+                <field name="total_leads" sum="Total"/>
+                <field name="total_calls" sum="Total"/>
+                <field name="answered_calls" sum="Total"/>
+                <field name="missed_calls" sum="Total"/>
+                <field name="total_talk_time_display" string="Talk Time"/>
+                <field name="converted_leads" sum="Total"/>
+                <field name="commission_earned" sum="Total" widget="monetary"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="dashboard_agent_performance_graph" model="ir.ui.view">
+        <field name="name">dashboard.agent.performance.graph</field>
+        <field name="model">realestate.agent.performance</field>
+        <field name="arch" type="xml">
+            <graph string="Agent Performance" type="bar">
+                <field name="agent_id" type="row"/>
+                <field name="total_calls" type="measure"/>
+                <field name="total_talk_time" type="measure"/>
+                <field name="commission_earned" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+</odoo>
