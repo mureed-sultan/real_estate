@@ -253,7 +253,9 @@ class CrmLead(models.Model):
 
         return {
             "type": "ir.actions.client",
-            "tag": "display_notification",
+            # "tag": "display_notification",
+            "tag": "reload",
+            
             "params": {
                 "title": _("Processing Complete"),
                 "message": _("Audio transcribed and analyzed. Check AI fields below."),
